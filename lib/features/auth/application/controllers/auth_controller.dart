@@ -52,6 +52,7 @@ class AuthController {
     _setLoading();
 
     try {
+      print('Exchanging IMAP credentials for tokens...');
       final tokens = await exchangeImapCredentialsUseCase(
         ExchangeImapCredentialsParams(
           provider: 'imap',

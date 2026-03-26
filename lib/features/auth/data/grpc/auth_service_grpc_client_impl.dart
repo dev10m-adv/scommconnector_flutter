@@ -118,6 +118,7 @@ class AuthServiceGrpcClientImpl implements AuthServiceGrpcClient {
 
   Future<T> _executeWithNetworkGuard<T>(Future<T> Function() action) async {
     try {
+      print('Executing gRPC action with network guard...');
       return await action();
     } on GrpcError catch (error) {
       throw _mapGrpcError(error);
