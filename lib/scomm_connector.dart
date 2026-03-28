@@ -8,6 +8,10 @@ export 'package:scommconnector/features/webrtc/webrtc.dart';
 export 'package:scommconnector/features/identity/identity.dart';
 export 'package:scommconnector/features/signaling/signaling.dart';
 export 'package:scommconnector/features/connect/connect_controller.dart';
+export 'package:scommconnector/features/connect/datachannel/scomm_datachannel_protocol.dart';
+export 'package:scommconnector/features/connect/datachannel/scomm_message_router.dart';
+export 'package:scommconnector/features/connect/datachannel/scomm_datachannel_transport.dart';
+export 'package:scommconnector/features/connect/datachannel/scomm_datachannel_controller.dart';
 
 
 import 'package:scommconnector/core/di/service_locator.dart';
