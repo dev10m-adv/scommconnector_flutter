@@ -35,8 +35,8 @@ class IdentityRepositoryImpl implements IdentityRepository {
   }
 
   @override
-  Future<SavedDeviceIdentity?> loadSavedDeviceIdentity() async {
-    final saved = await localDataSource.loadRegisteredDeviceIdentity();
+  Future<SavedDeviceIdentity?> loadSavedDeviceIdentity(String userId) async {
+    final saved = await localDataSource.loadRegisteredDeviceIdentity(userId);
     if (saved == null) {
       return null;
     }

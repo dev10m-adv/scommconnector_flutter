@@ -25,6 +25,7 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<AuthTokens> exchangeExternalProviderToken({
     required String provider,
     required String externalAccessToken,
+    required String userId,
   }) async {
     final response = await remoteDataSource.exchangeExternalProviderToken(
       ExchangeExternalTokenRequestModel(
@@ -33,7 +34,7 @@ class AuthRepositoryImpl implements AuthRepository {
       ),
     );
 
-    await localDataSource.saveTokens(response);
+    await localDataSource.saveTokens(response, userId);
     return response.toEntity();
   }
 
@@ -41,6 +42,7 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<AuthTokens> exchangeImapCredentials({
     required String provider,
     required ImapCredentials imapCredentials,
+    required String userId,
   }) async {
     final response = await remoteDataSource.exchangeImapCredentials(
       ExchangeImapCredentialsRequestModel(
@@ -49,13 +51,15 @@ class AuthRepositoryImpl implements AuthRepository {
       ),
     );
 
-    await localDataSource.saveTokens(response);
+    await localDataSource.saveTokens(response, userId);
     return response.toEntity();
   }
 
   @override
   Future<AuthTokens> refreshTokens({
     required String refreshToken,
+    required String userId,
+
   }) async {
     final response = await remoteDataSource.refreshTokens(
       RefreshAccessTokenRequestModel(
@@ -63,13 +67,13 @@ class AuthRepositoryImpl implements AuthRepository {
       ),
     );
 
-    await localDataSource.saveTokens(response);
+    await localDataSource.saveTokens(response, userId);
     return response.toEntity();
   }
 
   @override
-  Future<String?> getStoredAccessToken() async {
-    final storedTokens = await localDataSource.loadTokens();
+  Future<String?> getStoredAccessToken({required String userId}) async {
+    final storedTokens = await localDataSource.loadTokens(userId);
     if (storedTokens == null || storedTokens.accessToken.isEmpty) {
       return null;
     }
@@ -79,7 +83,7 @@ class AuthRepositoryImpl implements AuthRepository {
     }
 
     if (storedTokens.refreshToken.isEmpty) {
-      await localDataSource.clearTokens();
+      await localDataSource.clearUserToken(userId);
       throw const UnauthorizedException(message: _reauthMessage);
     }
 
@@ -88,10 +92,10 @@ class AuthRepositoryImpl implements AuthRepository {
         RefreshAccessTokenRequestModel(refreshToken: storedTokens.refreshToken),
       );
 
-      await localDataSource.saveTokens(refreshedTokens);
+      await localDataSource.saveTokens(refreshedTokens, userId);
       return refreshedTokens.accessToken;
     } on UnauthorizedException {
-      await localDataSource.clearTokens();
+      await localDataSource.clearUserToken(userId);
       throw const UnauthorizedException(message: _reauthMessage);
     }
   }
@@ -111,5 +115,10 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<void> clearTokens() async {
     await localDataSource.clearTokens();
+  }
+
+  @override
+  Future<void> clearUserToken({required String userId}) async {
+    await localDataSource.clearUserToken(userId);
   }
 }

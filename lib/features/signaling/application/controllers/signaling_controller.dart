@@ -205,7 +205,7 @@ class SignalingController {
         final stream = connectSignalingUseCase(deviceId: deviceId);
         _bindIncoming(stream);
         healthMonitor.startHeartbeat(
-          interval: const Duration(seconds: 15),
+          interval: const Duration(minutes: 15),
           onSendHeartbeat: (envelope) => sendEnvelope(envelope),
         );
 

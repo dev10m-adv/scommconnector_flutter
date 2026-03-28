@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:scommconnector/features/webrtc/domain/entities/webrtc_ice_server_config.dart';
+
 import '../signaling/application/controllers/signaling_controller.dart';
 import '../signaling/domain/entities/signaling_entities.dart';
 import '../webrtc/application/controllers/webrtc_controller.dart';
@@ -32,14 +34,15 @@ class ConnectController {
     required String deviceId,
     required String localUri,
     required List<String> dataChannels,
+    List<WebRtcIceServerConfig> iceServers = const [],
   }) async {
     _localUri = localUri;
 
     try {
       await signalingController.start(deviceId: deviceId);
 
-      await webRtcController.initialize(dataChannels: dataChannels);
-
+      // Attach incoming signaling listener immediately so early envelopes
+      // (like connection requests) are not dropped while WebRTC initializes.
       await _signalingSubscription?.cancel();
       _signalingSubscription = signalingController.incomingMessages.listen(
         (envelope) => _handleSignalingEnvelopeSafe(envelope),
@@ -47,6 +50,11 @@ class ConnectController {
           // Log error but don't crash the stream
           print('Error handling signaling envelope: $error');
         },
+      );
+
+      await webRtcController.initialize(
+        dataChannels: dataChannels,
+        iceServers: iceServers,
       );
 
       await _localIceSubscription?.cancel();

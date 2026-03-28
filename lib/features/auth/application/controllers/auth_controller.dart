@@ -30,6 +30,7 @@ class AuthController {
   Future<AuthTokens> exchangeProviderToken({
     required String provider,
     required String externalAccessToken,
+    required String userId,
   }) async {
     _setLoading();
 
@@ -38,6 +39,7 @@ class AuthController {
         ExchangeExternalTokenParams(
           provider: provider,
           externalAccessToken: externalAccessToken,
+          userId: userId,
         ),
       );
       _setAuthenticated(tokens);
@@ -57,6 +59,7 @@ class AuthController {
         ExchangeImapCredentialsParams(
           provider: 'imap',
           imapCredentials: credentials,
+          userId: credentials.userId,
         ),
       );
       _setAuthenticated(tokens);
@@ -67,13 +70,14 @@ class AuthController {
     }
   }
 
-  Future<AuthTokens> refreshAccessToken({required String refreshToken}) async {
+  Future<AuthTokens> refreshAccessToken({required String refreshToken, required String userId}) async {
     _setLoading();
 
     try {
       final tokens = await refreshAccessTokenUseCase(
         RefreshAccessTokenParams(
           refreshToken: refreshToken,
+          userId: userId,
         ),
       );
       _setAuthenticated(tokens);
@@ -84,8 +88,8 @@ class AuthController {
     }
   }
 
-  Future<String?> getAccessToken() {
-    return getAccessTokenUseCase();
+  Future<String?> getAccessToken({required String userId}) {
+    return getAccessTokenUseCase(userId);
   }
 
   void _setLoading() {

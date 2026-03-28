@@ -3,7 +3,7 @@ import 'package:scommconnector/core/config/webrtc_config.dart';
 import 'package:scommconnector/features/webrtc/domain/usecases/connection_state_usecase.dart';
 import '../../core/resilience/online_aware_resilience.dart';
 import '../../features/identity/identity.dart';
-import '../../features/network/connect_controller.dart';
+import '../../features/connect/connect_controller.dart';
 import '../../features/signaling/signaling.dart';
 import '../../features/webrtc/webrtc.dart';
 

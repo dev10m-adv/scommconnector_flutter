@@ -10,7 +10,7 @@ abstract class IdentityRepository {
     required DeviceMode mode,
   });
 
-  Future<SavedDeviceIdentity?> loadSavedDeviceIdentity();
+  Future<SavedDeviceIdentity?> loadSavedDeviceIdentity(String userId);
 
   Future<IdentityDevice> updateDevice({
     required String deviceId,

@@ -4,5 +4,5 @@ abstract class IdentityLocalDataSource {
     required String deviceId,
   });
 
-  Future<({String userId, String deviceId})?> loadRegisteredDeviceIdentity();
+  Future<({String userId, String deviceId})?> loadRegisteredDeviceIdentity(String userId);
 }

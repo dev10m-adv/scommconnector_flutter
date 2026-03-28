@@ -11,6 +11,7 @@ class ExchangeImapCredentialsUseCase {
     return repository.exchangeImapCredentials(
       provider: params.provider,
       imapCredentials: params.imapCredentials,
+      userId: params.userId,
     );
   }
 }

@@ -6,29 +6,25 @@ class IdentityLocalDataSourceImpl implements IdentityLocalDataSource {
   static const _registeredUserIdKey = 'identity_registered_user_id';
   static const _registeredDeviceIdKey = 'identity_registered_device_id';
 
+  String _deviceStoreKey(String userId) => 'identity_device_store_$userId';
+
   @override
   Future<void> saveRegisteredDeviceIdentity({
     required String userId,
     required String deviceId,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_registeredUserIdKey, userId);
-    await prefs.setString(_registeredDeviceIdKey, deviceId);
+    var key = _deviceStoreKey(userId);
+    await prefs.setString(key, deviceId);
   }
 
   @override
   Future<({String userId, String deviceId})?>
-  loadRegisteredDeviceIdentity() async {
+  loadRegisteredDeviceIdentity(String userId) async {
     final prefs = await SharedPreferences.getInstance();
-    final userId = prefs.getString(_registeredUserIdKey)?.trim();
-    final deviceId = prefs.getString(_registeredDeviceIdKey)?.trim();
+    final deviceId = prefs.getString(_deviceStoreKey(userId))?.trim();
 
-    if (userId == null ||
-        userId.isEmpty ||
-        deviceId == null ||
-        deviceId.isEmpty) {
-      return null;
-    }
+    if (deviceId == null || deviceId.isEmpty) return null;
 
     return (userId: userId, deviceId: deviceId);
   }

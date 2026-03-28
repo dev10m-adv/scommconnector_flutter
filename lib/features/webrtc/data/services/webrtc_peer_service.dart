@@ -148,7 +148,21 @@ class WebRtcPeerService {
   Future<void> addRemoteIceCandidate(WebRtcIceCandidate candidate) async {
     final pc = _requirePeerConnection();
 
-    if (await pc.getRemoteDescription() == null) {
+    // Guard: getRemoteDescription() throws a PlatformException if the native
+    // peer connection was closed between _requirePeerConnection() and here
+    // (race condition during reconnect / navigation). The candidate is no
+    // longer applicable – discard it silently.
+    bool hasRemoteDescription;
+    try {
+      hasRemoteDescription = (await pc.getRemoteDescription()) != null;
+    } catch (_) {
+      warningLog(
+        'addRemoteIceCandidate: peer connection closed during remote-description check; discarding candidate.',
+      );
+      return;
+    }
+
+    if (!hasRemoteDescription) {
       if (_pendingRemoteIceCandidates.length >=
           _maxPendingRemoteIceCandidates) {
         final dropped = _pendingRemoteIceCandidates.removeAt(0);

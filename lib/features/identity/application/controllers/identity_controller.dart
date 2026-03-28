@@ -49,12 +49,12 @@ class IdentityController {
 
   IdentityState get state => _state;
 
-  Future<SavedDeviceIdentity?> loadSavedDeviceIdentity() async {
+  Future<SavedDeviceIdentity?> loadSavedDeviceIdentity(String userId) async {
     _setLoading();
 
     try {
       final savedIdentity = await registerDeviceUseCase.repository
-          .loadSavedDeviceIdentity();
+          .loadSavedDeviceIdentity(userId);
 
       _state = _state.copyWith(
         status: IdentityStatus.success,
