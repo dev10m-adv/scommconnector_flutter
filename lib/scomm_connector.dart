@@ -16,9 +16,9 @@ export 'package:scommconnector/features/connect/datachannel/scomm_datachannel_co
 
 import 'package:scommconnector/core/di/service_locator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-typedef AuthSessionState = TestSessionState;
-Future<void> runScommConnectorDI() async {
-  await setupDependencies();
+
+Future<void> runScommConnectorDI(String host, int port, bool useTls) async {
+  await setupDependencies(host: host, port: port, useTls: useTls);
 }
 
 

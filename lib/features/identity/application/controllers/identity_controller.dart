@@ -1,3 +1,8 @@
+import 'package:scommconnector/features/identity/domain/usecases/add_allow_devices_usecase.dart';
+import 'package:scommconnector/features/identity/domain/usecases/list_allow_devices_usecase.dart';
+import 'package:scommconnector/features/identity/domain/usecases/remove_allow_devices_usecase.dart';
+import 'package:scommconnector/features/identity/domain/usecases/update_allow_devices_usecase.dart';
+
 import '../../../../core/errors/errors.dart';
 import '../../domain/entities/device_mode.dart';
 import '../../domain/entities/device_service.dart';
@@ -33,6 +38,11 @@ class IdentityController {
   final UpdateServiceUseCase updateServiceUseCase;
   final DeleteServiceUseCase deleteServiceUseCase;
 
+  final ListAllowUserDevicesUsecase listAllowUserDevicesUseCase;
+  final UpdateAllowUserDeviceUsecase updateAllowUserDeviceUseCase;
+  final AddAllowUserDeviceUsecase addAllowUserDeviceUseCase;
+  final RemoveAllowUserDeviceUsecase removeAllowUserDeviceUseCase;
+
   IdentityState _state = const IdentityState();
 
   IdentityController({
@@ -45,6 +55,11 @@ class IdentityController {
     required this.listDeviceServicesUseCase,
     required this.updateServiceUseCase,
     required this.deleteServiceUseCase,
+
+    required this.listAllowUserDevicesUseCase,
+    required this.updateAllowUserDeviceUseCase,
+    required this.addAllowUserDeviceUseCase,
+    required this.removeAllowUserDeviceUseCase,
   });
 
   IdentityState get state => _state;
@@ -300,5 +315,88 @@ class IdentityController {
     }
 
     return 'Identity request failed. Please try again.';
+  }
+
+  Future<List<IdentityDevice>> listAllowUserDevices({
+    required String deviceId,
+  }) async {
+    _setLoading();
+
+    try {
+      final devices = await listAllowUserDevicesUseCase(deviceId: deviceId);
+      _state = _state.copyWith(
+        status: IdentityStatus.success,
+        message: 'Allow user devices loaded',
+        clearError: true,
+      );
+      return devices;
+    } catch (error) {
+      _setFailure(error);
+      rethrow;
+    }
+  }
+
+  Future<IdentityDevice> addAllowUserDevice({
+    required String userId,
+    required String deviceId,
+    required String state,
+  }) async {
+    _setLoading();
+
+    try {
+      final device = await addAllowUserDeviceUseCase(
+        userId: userId,
+        deviceId: deviceId,
+        state: state,
+      );
+      _setDeviceSuccess(device, 'Device added to allow list successfully');
+      return device;
+    } catch (error) {
+      _setFailure(error);
+      rethrow;
+    }
+  }
+
+  Future<void> removeAllowUserDevice({
+    required String userId,
+    required String deviceId,
+  }) async {
+    _setLoading();
+
+    try {
+      await registerDeviceUseCase.repository.removeAllowUserDevice(
+        userId: userId,
+        deviceId: deviceId,
+      );
+      _state = _state.copyWith(
+        status: IdentityStatus.success,
+        message: 'Device removed from allow list successfully',
+        clearError: true,
+      );
+    } catch (error) {
+      _setFailure(error);
+      rethrow;
+    }
+  }
+
+  Future<IdentityDevice> updateAllowUserDevice({
+    required String userId,
+    required String deviceId,
+    required String state,
+  }) async {
+    _setLoading();
+
+    try {
+      final device = await updateAllowUserDeviceUseCase(
+        userId: userId,
+        deviceId: deviceId,
+        state: state,
+      );
+      _setDeviceSuccess(device, 'Allow device updated successfully');
+      return device;
+    } catch (error) {
+      _setFailure(error);
+      rethrow;
+    }
   }
 }

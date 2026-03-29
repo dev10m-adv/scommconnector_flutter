@@ -117,4 +117,40 @@ class IdentityRepositoryImpl implements IdentityRepository {
   Future<String> deleteService({required String serviceId}) {
     return remoteDataSource.deleteService(serviceId: serviceId);
   }
+  
+  @override
+  Future<IdentityDevice> addAllowUserDevice({required String userId, required String deviceId, required String state}) async {
+    final response = await remoteDataSource.addAllowUserDevice(
+      userId: userId,
+      deviceId: deviceId,
+      state: state,
+    );
+    return response.toEntity();
+  }
+  
+  @override
+  Future<List<IdentityDevice>> listAllowUserDevices({required String deviceId}) {
+    return remoteDataSource.listAllowUserDevices(deviceId: deviceId).then(
+      (response) => response
+          .map((device) => device.toEntity())
+          .toList(growable: false),
+    );
+  }
+  
+  @override
+  Future<String> removeAllowUserDevice({required String userId, required String deviceId}) {
+    return remoteDataSource.removeAllowUserDevice(
+      userId: userId,
+      deviceId: deviceId,
+    );
+  }
+  
+  @override
+  Future<IdentityDevice> updateAllowUserDevice({required String userId, required String deviceId, required String state}) {
+    return remoteDataSource.updateAllowUserDevice(
+      userId: userId,
+      deviceId: deviceId,
+      state: state,
+    ).then((response) => response.toEntity());
+  }
 }

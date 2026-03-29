@@ -39,4 +39,24 @@ abstract class IdentityServiceGrpcClient {
   });
 
   Future<String> deleteService({required String serviceId});
+
+
+  //// Allow User Devices
+  Future<List<DeviceModel>> listAllowUserDevices({required String deviceId});
+  Future<DeviceModel> addAllowUserDevice({
+    required String userId,
+    required String deviceId,
+    required String state,
+  });
+
+  Future<String> removeAllowUserDevice({
+    required String userId,
+    required String deviceId,
+  });
+
+  Future<DeviceModel> updateAllowUserDevice({
+    required String userId,
+    required String deviceId,
+    required String state,
+  });
 }

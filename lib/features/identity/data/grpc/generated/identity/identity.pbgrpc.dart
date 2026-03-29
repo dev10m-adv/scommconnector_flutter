@@ -67,6 +67,36 @@ class IdentityServiceClient extends $grpc.Client {
     return $createUnaryCall(_$listUserDevices, request, options: options);
   }
 
+  /// /// Allow User Devices
+  $grpc.ResponseFuture<$0.ListAllowUserDevicesResponse> listAllowUserDevices(
+    $0.ListAllowUserDevicesRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listAllowUserDevices, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.AddAllowUserDeviceResponse> addAllowUserDevice(
+    $0.AddAllowUserDeviceRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$addAllowUserDevice, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.RemoveAllowUserDeviceResponse> removeAllowUserDevice(
+    $0.RemoveAllowUserDeviceRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$removeAllowUserDevice, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.UpdateAllowUserDeviceResponse> updateAllowUserDevice(
+    $0.UpdateAllowUserDeviceRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$updateAllowUserDevice, request, options: options);
+  }
+
+  /// /// Service Management
   $grpc.ResponseFuture<$0.RegisterServiceResponse> registerService(
     $0.RegisterServiceRequest request, {
     $grpc.CallOptions? options,
@@ -122,6 +152,26 @@ class IdentityServiceClient extends $grpc.Client {
           '/scomm.identity.IdentityService/ListUserDevices',
           ($0.ListUserDevicesRequest value) => value.writeToBuffer(),
           $0.ListUserDevicesResponse.fromBuffer);
+  static final _$listAllowUserDevices = $grpc.ClientMethod<
+          $0.ListAllowUserDevicesRequest, $0.ListAllowUserDevicesResponse>(
+      '/scomm.identity.IdentityService/ListAllowUserDevices',
+      ($0.ListAllowUserDevicesRequest value) => value.writeToBuffer(),
+      $0.ListAllowUserDevicesResponse.fromBuffer);
+  static final _$addAllowUserDevice = $grpc.ClientMethod<
+          $0.AddAllowUserDeviceRequest, $0.AddAllowUserDeviceResponse>(
+      '/scomm.identity.IdentityService/AddAllowUserDevice',
+      ($0.AddAllowUserDeviceRequest value) => value.writeToBuffer(),
+      $0.AddAllowUserDeviceResponse.fromBuffer);
+  static final _$removeAllowUserDevice = $grpc.ClientMethod<
+          $0.RemoveAllowUserDeviceRequest, $0.RemoveAllowUserDeviceResponse>(
+      '/scomm.identity.IdentityService/RemoveAllowUserDevice',
+      ($0.RemoveAllowUserDeviceRequest value) => value.writeToBuffer(),
+      $0.RemoveAllowUserDeviceResponse.fromBuffer);
+  static final _$updateAllowUserDevice = $grpc.ClientMethod<
+          $0.UpdateAllowUserDeviceRequest, $0.UpdateAllowUserDeviceResponse>(
+      '/scomm.identity.IdentityService/UpdateAllowUserDevice',
+      ($0.UpdateAllowUserDeviceRequest value) => value.writeToBuffer(),
+      $0.UpdateAllowUserDeviceResponse.fromBuffer);
   static final _$registerService =
       $grpc.ClientMethod<$0.RegisterServiceRequest, $0.RegisterServiceResponse>(
           '/scomm.identity.IdentityService/RegisterService',
@@ -194,6 +244,42 @@ abstract class IdentityServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.ListUserDevicesRequest.fromBuffer(value),
         ($0.ListUserDevicesResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListAllowUserDevicesRequest,
+            $0.ListAllowUserDevicesResponse>(
+        'ListAllowUserDevices',
+        listAllowUserDevices_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListAllowUserDevicesRequest.fromBuffer(value),
+        ($0.ListAllowUserDevicesResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.AddAllowUserDeviceRequest,
+            $0.AddAllowUserDeviceResponse>(
+        'AddAllowUserDevice',
+        addAllowUserDevice_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.AddAllowUserDeviceRequest.fromBuffer(value),
+        ($0.AddAllowUserDeviceResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.RemoveAllowUserDeviceRequest,
+            $0.RemoveAllowUserDeviceResponse>(
+        'RemoveAllowUserDevice',
+        removeAllowUserDevice_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.RemoveAllowUserDeviceRequest.fromBuffer(value),
+        ($0.RemoveAllowUserDeviceResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.UpdateAllowUserDeviceRequest,
+            $0.UpdateAllowUserDeviceResponse>(
+        'UpdateAllowUserDevice',
+        updateAllowUserDevice_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.UpdateAllowUserDeviceRequest.fromBuffer(value),
+        ($0.UpdateAllowUserDeviceResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.RegisterServiceRequest,
             $0.RegisterServiceResponse>(
         'RegisterService',
@@ -276,6 +362,42 @@ abstract class IdentityServiceBase extends $grpc.Service {
 
   $async.Future<$0.ListUserDevicesResponse> listUserDevices(
       $grpc.ServiceCall call, $0.ListUserDevicesRequest request);
+
+  $async.Future<$0.ListAllowUserDevicesResponse> listAllowUserDevices_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListAllowUserDevicesRequest> $request) async {
+    return listAllowUserDevices($call, await $request);
+  }
+
+  $async.Future<$0.ListAllowUserDevicesResponse> listAllowUserDevices(
+      $grpc.ServiceCall call, $0.ListAllowUserDevicesRequest request);
+
+  $async.Future<$0.AddAllowUserDeviceResponse> addAllowUserDevice_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.AddAllowUserDeviceRequest> $request) async {
+    return addAllowUserDevice($call, await $request);
+  }
+
+  $async.Future<$0.AddAllowUserDeviceResponse> addAllowUserDevice(
+      $grpc.ServiceCall call, $0.AddAllowUserDeviceRequest request);
+
+  $async.Future<$0.RemoveAllowUserDeviceResponse> removeAllowUserDevice_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.RemoveAllowUserDeviceRequest> $request) async {
+    return removeAllowUserDevice($call, await $request);
+  }
+
+  $async.Future<$0.RemoveAllowUserDeviceResponse> removeAllowUserDevice(
+      $grpc.ServiceCall call, $0.RemoveAllowUserDeviceRequest request);
+
+  $async.Future<$0.UpdateAllowUserDeviceResponse> updateAllowUserDevice_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.UpdateAllowUserDeviceRequest> $request) async {
+    return updateAllowUserDevice($call, await $request);
+  }
+
+  $async.Future<$0.UpdateAllowUserDeviceResponse> updateAllowUserDevice(
+      $grpc.ServiceCall call, $0.UpdateAllowUserDeviceRequest request);
 
   $async.Future<$0.RegisterServiceResponse> registerService_Pre(
       $grpc.ServiceCall $call,

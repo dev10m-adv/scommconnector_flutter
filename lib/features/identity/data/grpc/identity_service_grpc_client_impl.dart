@@ -304,4 +304,79 @@ class IdentityServiceGrpcClientImpl implements IdentityServiceGrpcClient {
         return const UnknownAppException();
     }
   }
+  
+  @override
+  Future<DeviceModel> addAllowUserDevice({required String userId, required String deviceId, required String state}) async {
+    final response = await _executeWithNetworkGuard(() async {
+      final request = identity_pb.AddAllowUserDeviceRequest(
+        userId: userId,
+        deviceId: deviceId,
+        state: state,
+      );
+
+      return _client.addAllowUserDevice(
+        request,
+        options: await _authorizedOptions(),
+      );
+    });
+    return _toDeviceModel(response.device);
+  }
+  
+  @override
+  Future<List<DeviceModel>> listAllowUserDevices({required String deviceId}) async {
+    print("Listing allow user devices for deviceId: $deviceId");
+    final response = await _executeWithNetworkGuard(() async {
+      final request = identity_pb.ListAllowUserDevicesRequest(deviceId: deviceId);
+      return _client.listAllowUserDevices(
+        request,
+        options: await _authorizedOptions(),
+      );
+    });
+
+    return response.devices.map(_toDeviceModel).toList(growable: false);
+  }
+  
+  @override
+  Future<String> removeAllowUserDevice({required String userId, required String deviceId}) async {
+    final response = await _executeWithNetworkGuard(() async {
+      final request = identity_pb.RemoveAllowUserDeviceRequest(
+        userId: userId,
+        deviceId: deviceId,
+      );
+      return _client.removeAllowUserDevice(
+        request,
+        options: await _authorizedOptions(),
+      );
+    });
+
+    return response.message.isNotEmpty
+        ? response.message
+        : 'Allowed user device removed successfully';
+  }
+  
+  @override
+  Future<DeviceModel> updateAllowUserDevice({required String userId, required String deviceId, required String state}) async {
+    final response = await _executeWithNetworkGuard(() async {
+      final request = identity_pb.UpdateAllowUserDeviceRequest(
+        userId: userId,
+        deviceId: deviceId,
+        state: state,
+      );
+
+      return _client.updateAllowUserDevice(
+        request,
+        options: await _authorizedOptions(),
+      );
+    });
+
+    if (!response.hasDevice()) {
+      throw ServerException(
+        message: response.message.isNotEmpty
+            ? response.message
+            : 'Allowed user device update failed.',
+      );
+    }
+
+    return _toDeviceModel(response.device);
+  }
 }

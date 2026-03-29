@@ -236,6 +236,146 @@ final $typed_data.Uint8List deviceDescriptor = $convert.base64Decode(
     'BCABKAlSCmRldmljZVR5cGUSLgoEbW9kZRgFIAEoDjIaLnNjb21tLmlkZW50aXR5LkRldmljZU'
     '1vZGVSBG1vZGU=');
 
+@$core.Deprecated('Use listAllowUserDevicesRequestDescriptor instead')
+const ListAllowUserDevicesRequest$json = {
+  '1': 'ListAllowUserDevicesRequest',
+  '2': [
+    {'1': 'device_id', '3': 1, '4': 1, '5': 9, '10': 'deviceId'},
+  ],
+};
+
+/// Descriptor for `ListAllowUserDevicesRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listAllowUserDevicesRequestDescriptor =
+    $convert.base64Decode(
+        'ChtMaXN0QWxsb3dVc2VyRGV2aWNlc1JlcXVlc3QSGwoJZGV2aWNlX2lkGAEgASgJUghkZXZpY2'
+        'VJZA==');
+
+@$core.Deprecated('Use listAllowUserDevicesResponseDescriptor instead')
+const ListAllowUserDevicesResponse$json = {
+  '1': 'ListAllowUserDevicesResponse',
+  '2': [
+    {
+      '1': 'devices',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.scomm.identity.Device',
+      '10': 'devices'
+    },
+  ],
+};
+
+/// Descriptor for `ListAllowUserDevicesResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listAllowUserDevicesResponseDescriptor =
+    $convert.base64Decode(
+        'ChxMaXN0QWxsb3dVc2VyRGV2aWNlc1Jlc3BvbnNlEjAKB2RldmljZXMYASADKAsyFi5zY29tbS'
+        '5pZGVudGl0eS5EZXZpY2VSB2RldmljZXM=');
+
+@$core.Deprecated('Use addAllowUserDeviceRequestDescriptor instead')
+const AddAllowUserDeviceRequest$json = {
+  '1': 'AddAllowUserDeviceRequest',
+  '2': [
+    {'1': 'device_id', '3': 1, '4': 1, '5': 9, '10': 'deviceId'},
+    {'1': 'user_id', '3': 2, '4': 1, '5': 9, '10': 'userId'},
+    {'1': 'state', '3': 3, '4': 1, '5': 9, '10': 'state'},
+  ],
+};
+
+/// Descriptor for `AddAllowUserDeviceRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List addAllowUserDeviceRequestDescriptor =
+    $convert.base64Decode(
+        'ChlBZGRBbGxvd1VzZXJEZXZpY2VSZXF1ZXN0EhsKCWRldmljZV9pZBgBIAEoCVIIZGV2aWNlSW'
+        'QSFwoHdXNlcl9pZBgCIAEoCVIGdXNlcklkEhQKBXN0YXRlGAMgASgJUgVzdGF0ZQ==');
+
+@$core.Deprecated('Use addAllowUserDeviceResponseDescriptor instead')
+const AddAllowUserDeviceResponse$json = {
+  '1': 'AddAllowUserDeviceResponse',
+  '2': [
+    {
+      '1': 'device',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.scomm.identity.Device',
+      '10': 'device'
+    },
+    {'1': 'message', '3': 2, '4': 1, '5': 9, '10': 'message'},
+  ],
+};
+
+/// Descriptor for `AddAllowUserDeviceResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List addAllowUserDeviceResponseDescriptor =
+    $convert.base64Decode(
+        'ChpBZGRBbGxvd1VzZXJEZXZpY2VSZXNwb25zZRIuCgZkZXZpY2UYASABKAsyFi5zY29tbS5pZG'
+        'VudGl0eS5EZXZpY2VSBmRldmljZRIYCgdtZXNzYWdlGAIgASgJUgdtZXNzYWdl');
+
+@$core.Deprecated('Use removeAllowUserDeviceRequestDescriptor instead')
+const RemoveAllowUserDeviceRequest$json = {
+  '1': 'RemoveAllowUserDeviceRequest',
+  '2': [
+    {'1': 'device_id', '3': 1, '4': 1, '5': 9, '10': 'deviceId'},
+    {'1': 'user_id', '3': 2, '4': 1, '5': 9, '10': 'userId'},
+  ],
+};
+
+/// Descriptor for `RemoveAllowUserDeviceRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List removeAllowUserDeviceRequestDescriptor =
+    $convert.base64Decode(
+        'ChxSZW1vdmVBbGxvd1VzZXJEZXZpY2VSZXF1ZXN0EhsKCWRldmljZV9pZBgBIAEoCVIIZGV2aW'
+        'NlSWQSFwoHdXNlcl9pZBgCIAEoCVIGdXNlcklk');
+
+@$core.Deprecated('Use removeAllowUserDeviceResponseDescriptor instead')
+const RemoveAllowUserDeviceResponse$json = {
+  '1': 'RemoveAllowUserDeviceResponse',
+  '2': [
+    {'1': 'message', '3': 1, '4': 1, '5': 9, '10': 'message'},
+  ],
+};
+
+/// Descriptor for `RemoveAllowUserDeviceResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List removeAllowUserDeviceResponseDescriptor =
+    $convert.base64Decode(
+        'Ch1SZW1vdmVBbGxvd1VzZXJEZXZpY2VSZXNwb25zZRIYCgdtZXNzYWdlGAEgASgJUgdtZXNzYW'
+        'dl');
+
+@$core.Deprecated('Use updateAllowUserDeviceRequestDescriptor instead')
+const UpdateAllowUserDeviceRequest$json = {
+  '1': 'UpdateAllowUserDeviceRequest',
+  '2': [
+    {'1': 'device_id', '3': 1, '4': 1, '5': 9, '10': 'deviceId'},
+    {'1': 'user_id', '3': 2, '4': 1, '5': 9, '10': 'userId'},
+    {'1': 'state', '3': 3, '4': 1, '5': 9, '10': 'state'},
+  ],
+};
+
+/// Descriptor for `UpdateAllowUserDeviceRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List updateAllowUserDeviceRequestDescriptor =
+    $convert.base64Decode(
+        'ChxVcGRhdGVBbGxvd1VzZXJEZXZpY2VSZXF1ZXN0EhsKCWRldmljZV9pZBgBIAEoCVIIZGV2aW'
+        'NlSWQSFwoHdXNlcl9pZBgCIAEoCVIGdXNlcklkEhQKBXN0YXRlGAMgASgJUgVzdGF0ZQ==');
+
+@$core.Deprecated('Use updateAllowUserDeviceResponseDescriptor instead')
+const UpdateAllowUserDeviceResponse$json = {
+  '1': 'UpdateAllowUserDeviceResponse',
+  '2': [
+    {
+      '1': 'device',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.scomm.identity.Device',
+      '10': 'device'
+    },
+    {'1': 'message', '3': 2, '4': 1, '5': 9, '10': 'message'},
+  ],
+};
+
+/// Descriptor for `UpdateAllowUserDeviceResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List updateAllowUserDeviceResponseDescriptor =
+    $convert.base64Decode(
+        'Ch1VcGRhdGVBbGxvd1VzZXJEZXZpY2VSZXNwb25zZRIuCgZkZXZpY2UYASABKAsyFi5zY29tbS'
+        '5pZGVudGl0eS5EZXZpY2VSBmRldmljZRIYCgdtZXNzYWdlGAIgASgJUgdtZXNzYWdl');
+
 @$core.Deprecated('Use registerServiceRequestDescriptor instead')
 const RegisterServiceRequest$json = {
   '1': 'RegisterServiceRequest',

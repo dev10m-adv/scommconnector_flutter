@@ -731,6 +731,542 @@ class Device extends $pb.GeneratedMessage {
   void clearMode() => $_clearField(5);
 }
 
+class ListAllowUserDevicesRequest extends $pb.GeneratedMessage {
+  factory ListAllowUserDevicesRequest({
+    $core.String? deviceId,
+  }) {
+    final result = create();
+    if (deviceId != null) result.deviceId = deviceId;
+    return result;
+  }
+
+  ListAllowUserDevicesRequest._();
+
+  factory ListAllowUserDevicesRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListAllowUserDevicesRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListAllowUserDevicesRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'scomm.identity'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'deviceId')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListAllowUserDevicesRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListAllowUserDevicesRequest copyWith(
+          void Function(ListAllowUserDevicesRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as ListAllowUserDevicesRequest))
+          as ListAllowUserDevicesRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListAllowUserDevicesRequest create() =>
+      ListAllowUserDevicesRequest._();
+  @$core.override
+  ListAllowUserDevicesRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListAllowUserDevicesRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListAllowUserDevicesRequest>(create);
+  static ListAllowUserDevicesRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get deviceId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set deviceId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasDeviceId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearDeviceId() => $_clearField(1);
+}
+
+class ListAllowUserDevicesResponse extends $pb.GeneratedMessage {
+  factory ListAllowUserDevicesResponse({
+    $core.Iterable<Device>? devices,
+  }) {
+    final result = create();
+    if (devices != null) result.devices.addAll(devices);
+    return result;
+  }
+
+  ListAllowUserDevicesResponse._();
+
+  factory ListAllowUserDevicesResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListAllowUserDevicesResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListAllowUserDevicesResponse',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'scomm.identity'),
+      createEmptyInstance: create)
+    ..pPM<Device>(1, _omitFieldNames ? '' : 'devices',
+        subBuilder: Device.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListAllowUserDevicesResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListAllowUserDevicesResponse copyWith(
+          void Function(ListAllowUserDevicesResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as ListAllowUserDevicesResponse))
+          as ListAllowUserDevicesResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListAllowUserDevicesResponse create() =>
+      ListAllowUserDevicesResponse._();
+  @$core.override
+  ListAllowUserDevicesResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListAllowUserDevicesResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListAllowUserDevicesResponse>(create);
+  static ListAllowUserDevicesResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<Device> get devices => $_getList(0);
+}
+
+class AddAllowUserDeviceRequest extends $pb.GeneratedMessage {
+  factory AddAllowUserDeviceRequest({
+    $core.String? deviceId,
+    $core.String? userId,
+    $core.String? state,
+  }) {
+    final result = create();
+    if (deviceId != null) result.deviceId = deviceId;
+    if (userId != null) result.userId = userId;
+    if (state != null) result.state = state;
+    return result;
+  }
+
+  AddAllowUserDeviceRequest._();
+
+  factory AddAllowUserDeviceRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory AddAllowUserDeviceRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'AddAllowUserDeviceRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'scomm.identity'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'deviceId')
+    ..aOS(2, _omitFieldNames ? '' : 'userId')
+    ..aOS(3, _omitFieldNames ? '' : 'state')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  AddAllowUserDeviceRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  AddAllowUserDeviceRequest copyWith(
+          void Function(AddAllowUserDeviceRequest) updates) =>
+      super.copyWith((message) => updates(message as AddAllowUserDeviceRequest))
+          as AddAllowUserDeviceRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static AddAllowUserDeviceRequest create() => AddAllowUserDeviceRequest._();
+  @$core.override
+  AddAllowUserDeviceRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static AddAllowUserDeviceRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<AddAllowUserDeviceRequest>(create);
+  static AddAllowUserDeviceRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get deviceId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set deviceId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasDeviceId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearDeviceId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get userId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set userId($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasUserId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearUserId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get state => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set state($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasState() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearState() => $_clearField(3);
+}
+
+class AddAllowUserDeviceResponse extends $pb.GeneratedMessage {
+  factory AddAllowUserDeviceResponse({
+    Device? device,
+    $core.String? message,
+  }) {
+    final result = create();
+    if (device != null) result.device = device;
+    if (message != null) result.message = message;
+    return result;
+  }
+
+  AddAllowUserDeviceResponse._();
+
+  factory AddAllowUserDeviceResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory AddAllowUserDeviceResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'AddAllowUserDeviceResponse',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'scomm.identity'),
+      createEmptyInstance: create)
+    ..aOM<Device>(1, _omitFieldNames ? '' : 'device', subBuilder: Device.create)
+    ..aOS(2, _omitFieldNames ? '' : 'message')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  AddAllowUserDeviceResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  AddAllowUserDeviceResponse copyWith(
+          void Function(AddAllowUserDeviceResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as AddAllowUserDeviceResponse))
+          as AddAllowUserDeviceResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static AddAllowUserDeviceResponse create() => AddAllowUserDeviceResponse._();
+  @$core.override
+  AddAllowUserDeviceResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static AddAllowUserDeviceResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<AddAllowUserDeviceResponse>(create);
+  static AddAllowUserDeviceResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  Device get device => $_getN(0);
+  @$pb.TagNumber(1)
+  set device(Device value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasDevice() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearDevice() => $_clearField(1);
+  @$pb.TagNumber(1)
+  Device ensureDevice() => $_ensure(0);
+
+  @$pb.TagNumber(2)
+  $core.String get message => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set message($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasMessage() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearMessage() => $_clearField(2);
+}
+
+class RemoveAllowUserDeviceRequest extends $pb.GeneratedMessage {
+  factory RemoveAllowUserDeviceRequest({
+    $core.String? deviceId,
+    $core.String? userId,
+  }) {
+    final result = create();
+    if (deviceId != null) result.deviceId = deviceId;
+    if (userId != null) result.userId = userId;
+    return result;
+  }
+
+  RemoveAllowUserDeviceRequest._();
+
+  factory RemoveAllowUserDeviceRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory RemoveAllowUserDeviceRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'RemoveAllowUserDeviceRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'scomm.identity'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'deviceId')
+    ..aOS(2, _omitFieldNames ? '' : 'userId')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RemoveAllowUserDeviceRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RemoveAllowUserDeviceRequest copyWith(
+          void Function(RemoveAllowUserDeviceRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as RemoveAllowUserDeviceRequest))
+          as RemoveAllowUserDeviceRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static RemoveAllowUserDeviceRequest create() =>
+      RemoveAllowUserDeviceRequest._();
+  @$core.override
+  RemoveAllowUserDeviceRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static RemoveAllowUserDeviceRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<RemoveAllowUserDeviceRequest>(create);
+  static RemoveAllowUserDeviceRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get deviceId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set deviceId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasDeviceId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearDeviceId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get userId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set userId($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasUserId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearUserId() => $_clearField(2);
+}
+
+class RemoveAllowUserDeviceResponse extends $pb.GeneratedMessage {
+  factory RemoveAllowUserDeviceResponse({
+    $core.String? message,
+  }) {
+    final result = create();
+    if (message != null) result.message = message;
+    return result;
+  }
+
+  RemoveAllowUserDeviceResponse._();
+
+  factory RemoveAllowUserDeviceResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory RemoveAllowUserDeviceResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'RemoveAllowUserDeviceResponse',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'scomm.identity'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'message')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RemoveAllowUserDeviceResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RemoveAllowUserDeviceResponse copyWith(
+          void Function(RemoveAllowUserDeviceResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as RemoveAllowUserDeviceResponse))
+          as RemoveAllowUserDeviceResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static RemoveAllowUserDeviceResponse create() =>
+      RemoveAllowUserDeviceResponse._();
+  @$core.override
+  RemoveAllowUserDeviceResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static RemoveAllowUserDeviceResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<RemoveAllowUserDeviceResponse>(create);
+  static RemoveAllowUserDeviceResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get message => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set message($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasMessage() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearMessage() => $_clearField(1);
+}
+
+class UpdateAllowUserDeviceRequest extends $pb.GeneratedMessage {
+  factory UpdateAllowUserDeviceRequest({
+    $core.String? deviceId,
+    $core.String? userId,
+    $core.String? state,
+  }) {
+    final result = create();
+    if (deviceId != null) result.deviceId = deviceId;
+    if (userId != null) result.userId = userId;
+    if (state != null) result.state = state;
+    return result;
+  }
+
+  UpdateAllowUserDeviceRequest._();
+
+  factory UpdateAllowUserDeviceRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory UpdateAllowUserDeviceRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'UpdateAllowUserDeviceRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'scomm.identity'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'deviceId')
+    ..aOS(2, _omitFieldNames ? '' : 'userId')
+    ..aOS(3, _omitFieldNames ? '' : 'state')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateAllowUserDeviceRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateAllowUserDeviceRequest copyWith(
+          void Function(UpdateAllowUserDeviceRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as UpdateAllowUserDeviceRequest))
+          as UpdateAllowUserDeviceRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static UpdateAllowUserDeviceRequest create() =>
+      UpdateAllowUserDeviceRequest._();
+  @$core.override
+  UpdateAllowUserDeviceRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static UpdateAllowUserDeviceRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<UpdateAllowUserDeviceRequest>(create);
+  static UpdateAllowUserDeviceRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get deviceId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set deviceId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasDeviceId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearDeviceId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get userId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set userId($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasUserId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearUserId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get state => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set state($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasState() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearState() => $_clearField(3);
+}
+
+class UpdateAllowUserDeviceResponse extends $pb.GeneratedMessage {
+  factory UpdateAllowUserDeviceResponse({
+    Device? device,
+    $core.String? message,
+  }) {
+    final result = create();
+    if (device != null) result.device = device;
+    if (message != null) result.message = message;
+    return result;
+  }
+
+  UpdateAllowUserDeviceResponse._();
+
+  factory UpdateAllowUserDeviceResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory UpdateAllowUserDeviceResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'UpdateAllowUserDeviceResponse',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'scomm.identity'),
+      createEmptyInstance: create)
+    ..aOM<Device>(1, _omitFieldNames ? '' : 'device', subBuilder: Device.create)
+    ..aOS(2, _omitFieldNames ? '' : 'message')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateAllowUserDeviceResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateAllowUserDeviceResponse copyWith(
+          void Function(UpdateAllowUserDeviceResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as UpdateAllowUserDeviceResponse))
+          as UpdateAllowUserDeviceResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static UpdateAllowUserDeviceResponse create() =>
+      UpdateAllowUserDeviceResponse._();
+  @$core.override
+  UpdateAllowUserDeviceResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static UpdateAllowUserDeviceResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<UpdateAllowUserDeviceResponse>(create);
+  static UpdateAllowUserDeviceResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  Device get device => $_getN(0);
+  @$pb.TagNumber(1)
+  set device(Device value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasDevice() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearDevice() => $_clearField(1);
+  @$pb.TagNumber(1)
+  Device ensureDevice() => $_ensure(0);
+
+  @$pb.TagNumber(2)
+  $core.String get message => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set message($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasMessage() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearMessage() => $_clearField(2);
+}
+
 class RegisterServiceRequest extends $pb.GeneratedMessage {
   factory RegisterServiceRequest({
     $core.String? deviceId,

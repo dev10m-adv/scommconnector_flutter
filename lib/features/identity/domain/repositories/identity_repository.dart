@@ -38,4 +38,21 @@ abstract class IdentityRepository {
   });
 
   Future<String> deleteService({required String serviceId});
+
+  ///// Allow User Devices
+  Future<List<IdentityDevice>> listAllowUserDevices({required String deviceId});
+  Future<IdentityDevice> addAllowUserDevice({
+    required String userId,
+    required String deviceId,
+    required String state,
+  });
+  Future<String> removeAllowUserDevice({
+    required String userId,
+    required String deviceId,
+  });
+  Future<IdentityDevice> updateAllowUserDevice({
+    required String userId,
+    required String deviceId,
+    required String state,
+  });
 }

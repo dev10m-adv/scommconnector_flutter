@@ -85,4 +85,36 @@ class IdentityRemoteDataSourceImpl implements IdentityRemoteDataSource {
   Future<String> deleteService({required String serviceId}) {
     return grpcClient.deleteService(serviceId: serviceId);
   }
+  
+  @override
+  Future<DeviceModel> addAllowUserDevice({required String userId, required String deviceId, required String state}) {
+    return grpcClient.addAllowUserDevice(
+      userId: userId,
+      deviceId: deviceId,
+      state: state,
+    );
+  }
+  
+  @override
+  Future<List<DeviceModel>> listAllowUserDevices({required String deviceId}) {
+    print("RemoteDataSource: Listing allow user devices for deviceId: $deviceId");
+    return grpcClient.listAllowUserDevices(deviceId: deviceId);
+  }
+  
+  @override
+  Future<String> removeAllowUserDevice({required String userId, required String deviceId}) {
+    return grpcClient.removeAllowUserDevice(
+      userId: userId,
+      deviceId: deviceId,
+    );
+  }
+  
+  @override
+  Future<DeviceModel> updateAllowUserDevice({required String userId, required String deviceId, required String state}) {
+    return grpcClient.updateAllowUserDevice(
+      userId: userId,
+      deviceId: deviceId,
+      state: state,
+     );
+  }
 }
