@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:scommconnector/features/identity/domain/usecases/add_allow_devices_usecase.dart';
 import 'package:scommconnector/features/identity/domain/usecases/list_allow_devices_usecase.dart';
 import 'package:scommconnector/features/identity/domain/usecases/remove_allow_devices_usecase.dart';
@@ -64,6 +66,15 @@ class IdentityController {
 
   IdentityState get state => _state;
 
+  final _identityStateController = StreamController<IdentityState>.broadcast();
+  Stream<IdentityState> get identityStates => _identityStateController.stream;
+
+    void _notify(IdentityState newState) {
+    _state = newState;
+    _identityStateController.add(_state);
+  }
+
+
   Future<SavedDeviceIdentity?> loadSavedDeviceIdentity(String userId) async {
     _setLoading();
 
@@ -73,11 +84,13 @@ class IdentityController {
 
       _state = _state.copyWith(
         status: IdentityStatus.success,
+        isRegistered: savedIdentity != null,
         savedDeviceIdentity: savedIdentity,
+        clearSavedDeviceIdentity: savedIdentity == null,
         clearError: true,
         clearMessage: true,
       );
-
+      _notify(_state);
       return savedIdentity;
     } catch (error) {
       _setFailure(error);
@@ -146,6 +159,7 @@ class IdentityController {
         clearDevice: true,
         clearError: true,
       );
+      _notify(_state);
       return message;
     } catch (error) {
       _setFailure(error);
@@ -260,6 +274,7 @@ class IdentityController {
       clearError: true,
       clearMessage: true,
     );
+    _notify(_state);
   }
 
   void _setDeviceSuccess(IdentityDevice device, String message) {
@@ -270,9 +285,11 @@ class IdentityController {
         userId: device.userId,
         deviceId: device.deviceId,
       ),
+      isRegistered: true,
       message: message,
       clearError: true,
     );
+    _notify(_state);
   }
 
   void _setDevicesSuccess(List<IdentityDevice> devices) {
@@ -282,15 +299,26 @@ class IdentityController {
       clearError: true,
       clearMessage: true,
     );
+    _notify(_state);
   }
 
   void _setServiceSuccess(DeviceService service, String message) {
+    final nextServices = [..._state.services];
+    final index = nextServices.indexWhere((item) => item.serviceId == service.serviceId);
+    if (index >= 0) {
+      nextServices[index] = service;
+    } else {
+      nextServices.add(service);
+    }
+
     _state = _state.copyWith(
       status: IdentityStatus.success,
       service: service,
+      services: nextServices,
       message: message,
       clearError: true,
     );
+    _notify(_state);
   }
 
   void _setServicesSuccess(List<DeviceService> services) {
@@ -300,6 +328,7 @@ class IdentityController {
       clearError: true,
       clearMessage: true,
     );
+    _notify(_state);
   }
 
   void _setFailure(Object error) {
@@ -307,6 +336,7 @@ class IdentityController {
       status: IdentityStatus.failure,
       error: _toUserMessage(error),
     );
+    _notify(_state);
   }
 
   String _toUserMessage(Object error) {

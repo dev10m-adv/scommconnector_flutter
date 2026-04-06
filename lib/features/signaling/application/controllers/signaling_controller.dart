@@ -45,6 +45,7 @@ class SignalingController {
   final _incomingController = StreamController<SignalEnvelope>.broadcast();
   final _presenceController =
       StreamController<SignalingPresenceEvent>.broadcast();
+  final _stateController = StreamController<SignalingState>.broadcast();
 
   SignalingController({
     required this.connectSignalingUseCase,
@@ -58,6 +59,7 @@ class SignalingController {
   });
 
   SignalingState get state => _state;
+  Stream<SignalingState> get signalingStates => _stateController.stream;
   Stream<SignalEnvelope> get incomingMessages => _incomingController.stream;
   Stream<SignalingPresenceEvent> get presenceEvents =>
       _presenceController.stream;
@@ -82,11 +84,11 @@ class SignalingController {
     await disconnectSignalingUseCase();
     requestMatcher.clearAllRequests();
 
-    _state = _state.copyWith(
+    _emitState(_state.copyWith(
       status: SignalingStatus.disconnected,
       message: 'Disconnected.',
       clearError: true,
-    );
+    ));
     infoLog('Signaling disconnected and cleaned up.');
   }
 
@@ -133,10 +135,10 @@ class SignalingController {
       await sendSignalEnvelopeUseCase(envelope);
     } catch (error) {
       final appError = errorClassifier.toAppError(error);
-      _state = _state.copyWith(
+      _emitState(_state.copyWith(
         status: SignalingStatus.failure,
         error: appError.message,
-      );
+      ));
       errorLog('Failed to send signaling envelope.', error);
       rethrow;
     }
@@ -158,10 +160,10 @@ class SignalingController {
             },
           );
     } catch (error) {
-      _state = _state.copyWith(
+      _emitState(_state.copyWith(
         status: SignalingStatus.failure,
         error: errorClassifier.toAppError(error).message,
-      );
+      ));
       errorLog('Failed to start presence watch.', error);
       rethrow;
     }
@@ -169,6 +171,7 @@ class SignalingController {
 
   Future<void> dispose() async {
     await stop();
+    await _stateController.close();
     await _incomingController.close();
     await _presenceController.close();
   }
@@ -187,7 +190,7 @@ class SignalingController {
       final isFinalAttempt = attempt == 3;
       final shouldShowReconnect = isReconnect && attempt > 0;
 
-      _state = _state.copyWith(
+      _emitState(_state.copyWith(
         status: shouldShowReconnect
             ? SignalingStatus.reconnecting
             : SignalingStatus.connecting,
@@ -195,7 +198,7 @@ class SignalingController {
             ? 'Reconnecting (attempt ${attempt + 1})...'
             : null,
         clearError: true,
-      );
+      ));
 
       try {
         await _disposeStreamBindings();
@@ -209,11 +212,11 @@ class SignalingController {
           onSendHeartbeat: (envelope) => sendEnvelope(envelope),
         );
 
-        _state = _state.copyWith(
+        _emitState(_state.copyWith(
           status: SignalingStatus.connected,
           message: 'Connected.',
           clearError: true,
-        );
+        ));
         infoLog('Signaling connected successfully.');
         return;
       } catch (error) {
@@ -224,18 +227,18 @@ class SignalingController {
         );
         if (!errorClassifier.shouldAutoReconnect(appError)) {
           _autoReconnectEnabled = false;
-          _state = _state.copyWith(
+          _emitState(_state.copyWith(
             status: SignalingStatus.failure,
             error: appError.message,
-          );
+          ));
           throw appError;
         }
 
         if (isFinalAttempt) {
-          _state = _state.copyWith(
+          _emitState(_state.copyWith(
             status: SignalingStatus.failure,
             error: appError.message,
-          );
+          ));
           throw appError;
         }
 
@@ -374,10 +377,10 @@ class SignalingController {
       return;
     }
 
-    _state = _state.copyWith(
+    _emitState(_state.copyWith(
       status: SignalingStatus.reconnecting,
       message: 'Internet recovered. Reconnecting...',
-    );
+    ));
 
     _reconnectInProgress = true;
     try {
@@ -398,11 +401,11 @@ class SignalingController {
 
     if (!errorClassifier.shouldAutoReconnect(error)) {
       _autoReconnectEnabled = false;
-      _state = _state.copyWith(
+      _emitState(_state.copyWith(
         status: SignalingStatus.failure,
         error: error.message,
         clearMessage: true,
-      );
+      ));
       return;
     }
 
@@ -410,11 +413,11 @@ class SignalingController {
       return;
     }
 
-    _state = _state.copyWith(
+    _emitState(_state.copyWith(
       status: SignalingStatus.reconnecting,
       message: 'Connection lost. Reconnecting...',
       error: error.message,
-    );
+    ));
 
     _reconnectInProgress = true;
     _connectWithRetries(isReconnect: true).whenComplete(() {
@@ -431,5 +434,12 @@ class SignalingController {
   String _buildMessageId() {
     final timestamp = DateTime.now().microsecondsSinceEpoch;
     return 'sig-$timestamp';
+  }
+
+  void _emitState(SignalingState next) {
+    _state = next;
+    if (!_stateController.isClosed) {
+      _stateController.add(_state);
+    }
   }
 }

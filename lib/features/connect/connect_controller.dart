@@ -11,24 +11,23 @@ import '../webrtc/domain/entities/webrtc_session_description.dart';
 class ConnectController {
   final SignalingController signalingController;
   final WebRtcController webRtcController;
-
-  StreamSubscription<SignalEnvelope>? _signalingSubscription;
-  StreamSubscription<WebRtcIceCandidate>? _localIceSubscription;
-
-  final _incomingConnectionRequests =
-      StreamController<SignalEnvelope>.broadcast();
-
-  String? _localUri;
-  String? _remoteUri;
-  String? _activeRequestId;
-
   ConnectController({
     required this.signalingController,
     required this.webRtcController,
   });
 
-  Stream<SignalEnvelope> get incomingConnectionRequests =>
-      _incomingConnectionRequests.stream;
+
+  StreamSubscription<SignalEnvelope>? _signalingSubscription;
+  StreamSubscription<WebRtcIceCandidate>? _localIceSubscription;
+  String? _localUri;
+  String? _remoteUri;
+  String? _activeRequestId;
+
+  final _incomingConnectionRequests = StreamController<SignalEnvelope>.broadcast();
+  Stream<SignalEnvelope> get incomingConnectionRequests => _incomingConnectionRequests.stream;
+
+
+  bool _isSignalingStart = false;
 
   Future<void> start({
     required String deviceId,
@@ -37,15 +36,19 @@ class ConnectController {
     List<WebRtcIceServerConfig> iceServers = const [],
   }) async {
     _localUri = localUri;
-
+    if (_isSignalingStart) {
+      print('Signaling stack is already started.');
+      return;
+    }
     try {
+      _isSignalingStart = true;
       await signalingController.start(deviceId: deviceId);
 
       // Attach incoming signaling listener immediately so early envelopes
       // (like connection requests) are not dropped while WebRTC initializes.
       await _signalingSubscription?.cancel();
       _signalingSubscription = signalingController.incomingMessages.listen(
-        (envelope) => _handleSignalingEnvelopeSafe(envelope),
+        (envelope) => _handleSignalingEnvelope(envelope),
         onError: (error, stackTrace) {
           // Log error but don't crash the stream
           print('Error handling signaling envelope: $error');
@@ -66,6 +69,7 @@ class ConnectController {
       );
     } catch (error) {
       // Rollback: if WebRTC init fails after signaling started, stop signaling
+      _isSignalingStart = false;
       await signalingController.stop();
       rethrow;
     }
@@ -83,6 +87,7 @@ class ConnectController {
 
     await webRtcController.close();
     await signalingController.stop();
+    _isSignalingStart = false;
   }
 
   Future<void> initiateConnection({
@@ -149,88 +154,81 @@ class ConnectController {
     }
   }
 
-  Future<void> _handleSignalingEnvelopeSafe(SignalEnvelope envelope) async {
-    try {
-      await _handleSignalingEnvelope(envelope);
-    } catch (error, stackTrace) {
-      // Log error so it's not silently lost
-      print('Error in _handleSignalingEnvelope: $error\n$stackTrace');
-      // Re-throw so caller knows there was an issue
-      rethrow;
-    }
-  }
-
   Future<void> _handleSignalingEnvelope(SignalEnvelope envelope) async {
-    switch (envelope.payloadType) {
-      case SignalingPayloadType.connectionRequest:
-        _incomingConnectionRequests.add(envelope);
-        break;
-
-      case SignalingPayloadType.offer:
-        final remoteOffer = envelope.offer;
-        print(
-          'Received offer from ${envelope.from?.uri} with requestId ${remoteOffer?.requestId}',
-        );
-        if (remoteOffer == null) {
+    try {
+      switch (envelope.payloadType) {
+        case SignalingPayloadType.connectionRequest:
+          _incomingConnectionRequests.add(envelope);
           break;
-        }
-        final offer = WebRtcSessionDescription(
-          type: 'offer',
-          sdp: remoteOffer.sdp,
-        );
 
-        _remoteUri = envelope.from?.uri;
-        _activeRequestId = remoteOffer.requestId;
+        case SignalingPayloadType.offer:
+          final remoteOffer = envelope.offer;
+          print(
+            'Received offer from ${envelope.from?.uri} with requestId ${remoteOffer?.requestId}',
+          );
+          if (remoteOffer == null) {
+            break;
+          }
+          final offer = WebRtcSessionDescription(
+            type: 'offer',
+            sdp: remoteOffer.sdp,
+          );
 
-        if (_remoteUri == null || _activeRequestId == null) {
+          _remoteUri = envelope.from?.uri;
+          _activeRequestId = remoteOffer.requestId;
+
+          if (_remoteUri == null || _activeRequestId == null) {
+            break;
+          }
+
+          final answer = await webRtcController.createAnswerForOffer(offer);
+          print("Created Answer for offer with requestId ${answer.type}");
+          await _sendAnswer(
+            answer: answer,
+            toUri: _remoteUri!,
+            requestId: _activeRequestId!,
+          );
           break;
-        }
 
-        final answer = await webRtcController.createAnswerForOffer(offer);
-        print("Created Answer for offer with requestId ${answer.type}");
-        await _sendAnswer(
-          answer: answer,
-          toUri: _remoteUri!,
-          requestId: _activeRequestId!,
-        );
-        break;
-
-      case SignalingPayloadType.answer:
-        final remoteAnswer = envelope.answer;
-        if (remoteAnswer == null) {
+        case SignalingPayloadType.answer:
+          final remoteAnswer = envelope.answer;
+          if (remoteAnswer == null) {
+            break;
+          }
+          final answer = WebRtcSessionDescription(
+            type: 'answer',
+            sdp: remoteAnswer.sdp,
+          );
+          await webRtcController.setRemoteAnswer(answer);
           break;
-        }
-        final answer = WebRtcSessionDescription(
-          type: 'answer',
-          sdp: remoteAnswer.sdp,
-        );
-        await webRtcController.setRemoteAnswer(answer);
-        break;
 
-      case SignalingPayloadType.iceCandidate:
-        final remoteIce = envelope.iceCandidate;
-        if (remoteIce == null) {
+        case SignalingPayloadType.iceCandidate:
+          final remoteIce = envelope.iceCandidate;
+          if (remoteIce == null) {
+            break;
+          }
+          await webRtcController.addRemoteIceCandidate(
+            WebRtcIceCandidate(
+              candidate: remoteIce.candidate,
+              sdpMid: remoteIce.sdpMid,
+              sdpMLineIndex: remoteIce.sdpMLineIndex,
+            ),
+          );
           break;
-        }
-        await webRtcController.addRemoteIceCandidate(
-          WebRtcIceCandidate(
-            candidate: remoteIce.candidate,
-            sdpMid: remoteIce.sdpMid,
-            sdpMLineIndex: remoteIce.sdpMLineIndex,
-          ),
-        );
-        break;
-      case SignalingPayloadType.connectionResponse:
-        // Connection response is handled at a higher level (e.g. TestingLabController)
-        break;
-      case SignalingPayloadType.ping:
-      case SignalingPayloadType.pong:
-        // Heartbeat messages - can be used for connection health monitoring
-        break;
+        case SignalingPayloadType.connectionResponse:
+          // Connection response is handled at a higher level (e.g. TestingLabController)
+          break;
+        case SignalingPayloadType.ping:
+        case SignalingPayloadType.pong:
+          // Heartbeat messages - can be used for connection health monitoring
+          break;
 
-      default:
-        print('Received unsupported signaling envelope: $envelope');
-        break;
+        default:
+          print('Received unsupported signaling envelope: $envelope');
+          break;
+      }
+    } catch (e) {
+      print('Error handling signaling envelope: $e');
     }
   }
 

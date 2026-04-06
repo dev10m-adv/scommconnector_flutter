@@ -28,4 +28,8 @@ abstract class AuthRepository {
   Future<void> clearUserToken({
     required String userId,
   });
+
+
+  Future<String?> getLastUsedUserId();
+  Future<void> removeLastUsedUserId();
 }

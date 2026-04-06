@@ -1,34 +1,70 @@
-import '../../domain/entities/auth_tokens.dart';
-
-enum AuthStatus { initial, loading, authenticated, failure }
-
 class AuthState {
-  final AuthStatus status;
-  final AuthTokens? tokens;
+  final bool isLoggedIn;
+  final bool isLoading;
   final String? error;
+  final String? userId;
 
   const AuthState({
-    this.status = AuthStatus.initial,
-    this.tokens,
+    required this.isLoggedIn,
+    required this.isLoading,
     this.error,
+    this.userId,
   });
 
-  String? get accessToken => tokens?.accessToken;
+  const AuthState.initial()
+      : isLoggedIn = false,
+        isLoading = false,
+        error = null,
+        userId = null;
 
-  String? get refreshToken => tokens?.refreshToken;
+  const AuthState.loading()
+      : isLoggedIn = false,
+        isLoading = true,
+        error = null,
+        userId = null;
+
+  const AuthState.authenticated(String this.userId)
+      : isLoggedIn = true,
+        isLoading = false,
+        error = null;
+
+
+  const AuthState.unauthenticated({this.error})
+      : isLoggedIn = false,
+        isLoading = false,
+        userId = null;
 
   AuthState copyWith({
-    AuthStatus? status,
-    AuthTokens? tokens,
+    bool? isLoggedIn,
+    bool? isLoading,
     String? error,
-    bool clearTokens = false,
-    bool clearDeviceRegistration = false,
+    String? userId,
+
     bool clearError = false,
   }) {
     return AuthState(
-      status: status ?? this.status,
-      tokens: clearTokens ? null : (tokens ?? this.tokens),
+      isLoggedIn: isLoggedIn ?? this.isLoggedIn,
+      isLoading: isLoading ?? this.isLoading,
+      userId: userId ?? this.userId,
       error: clearError ? null : (error ?? this.error),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'isLoggedIn': isLoggedIn,
+      'isLoading': isLoading,
+      'error': error,
+      'userId': userId,
+    };
+  }
+
+  factory AuthState.fromJson(Map<String, dynamic> json) {
+    return AuthState(
+      isLoggedIn: json['isLoggedIn'] as bool,
+      isLoading: json['isLoading'] as bool,
+      error: json['error'] as String?,
+      userId: json['userId'] as String?,
     );
   }
 }

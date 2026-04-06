@@ -17,6 +17,10 @@ export 'package:scommconnector/features/connect/datachannel/scomm_datachannel_co
 import 'package:scommconnector/core/di/service_locator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+
+export 'package:scommconnector/scomm_connector_controller.dart';
+export 'package:scommconnector/scomm_start_config.dart';
+
 Future<void> runScommConnectorDI(String host, int port, bool useTls) async {
   await setupDependencies(host: host, port: port, useTls: useTls);
 }

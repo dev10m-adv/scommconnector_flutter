@@ -123,6 +123,106 @@ class SignalingEnvelope {
     if (pongTimestampMs != null) return SignalingPayloadType.pong;
     return SignalingPayloadType.unknown;
   }
+
+  Map<String, dynamic> toJson() {
+        return {
+      'messageId': messageId,
+      'sessionId': sessionId,
+      'from': from == null ? null : {'uri': from!.uri},
+      'to': to == null ? null : {'uri': to!.uri},
+      'helloDeviceId': helloDeviceId,
+      'connectionRequest': connectionRequest == null
+          ? null
+          : {
+              'requestId': connectionRequest!.requestId,
+              'serviceName': connectionRequest!.serviceName,
+              'note': connectionRequest!.note,
+            },
+      'connectionResponse': connectionResponse == null
+          ? null
+          : {
+              'requestId': connectionResponse!.requestId,
+              'status': connectionResponse!.status.name,
+              'reason': connectionResponse!.reason,
+            },
+      'offer': offer == null
+          ? null
+          : {
+              'requestId': offer!.requestId,
+              'sdp': offer!.sdp,
+            },
+      'answer': answer == null
+          ? null
+          : {
+              'requestId': answer!.requestId,
+              'sdp': answer!.sdp,
+            },
+      'iceCandidate': iceCandidate == null
+          ? null
+          : {
+              'requestId': iceCandidate!.requestId,
+              'candidate': iceCandidate!.candidate,
+              'sdpMid': iceCandidate!.sdpMid,
+              'sdpMLineIndex': iceCandidate!.sdpMLineIndex,
+            },
+      'pingTimestampMs': pingTimestampMs,
+      'pongTimestampMs': pongTimestampMs,
+    };
+  }
+
+
+  factory SignalingEnvelope.fromJson(Map<String, dynamic> json) {
+    return SignalingEnvelope(
+      messageId: json['messageId'] as String,
+      sessionId: json['sessionId'] as String? ?? '',
+      from: json['from'] != null
+          ? SignalingDeviceRef(uri: (json['from'] as Map<String, dynamic>)['uri'] as String)
+          : null,
+      to: json['to'] != null
+          ? SignalingDeviceRef(uri: (json['to'] as Map<String, dynamic>)['uri'] as String)
+          : null,
+      helloDeviceId: json['helloDeviceId'] as String?,
+      connectionRequest: json['connectionRequest'] != null
+          ? SignalingConnectionRequest(
+              requestId: (json['connectionRequest'] as Map<String, dynamic>)['requestId'] as String,
+              serviceName: (json['connectionRequest'] as Map<String, dynamic>)['serviceName'] as String,
+              note: (json['connectionRequest'] as Map<String, dynamic>)['note'] as String? ?? '',
+            )
+          : null,
+      connectionResponse: json['connectionResponse'] != null
+          ? SignalingConnectionResponse(
+              requestId: (json['connectionResponse'] as Map<String, dynamic>)['requestId'] as String,
+              status: SignalingConnectionResponseStatus.values.firstWhere(
+                (e) => e.name == (json['connectionResponse'] as Map<String, dynamic>)['status'],
+                orElse: () => SignalingConnectionResponseStatus.unspecified,
+              ),
+              reason: (json['connectionResponse'] as Map<String, dynamic>)['reason'] as String? ?? '',
+            )
+          : null,
+      offer: json['offer'] != null
+          ? SignalingOffer(
+              requestId: (json['offer'] as Map<String, dynamic>)['requestId'] as String,
+              sdp: (json['offer'] as Map<String, dynamic>)['sdp'] as String,
+            )
+          : null,
+      answer: json['answer'] != null
+          ? SignalingAnswer(
+              requestId: (json['answer'] as Map<String, dynamic>)['requestId'] as String,
+              sdp: (json['answer'] as Map<String, dynamic>)['sdp'] as String,
+            )
+          : null,
+      iceCandidate: json['iceCandidate'] != null
+          ? SignalingIceCandidate(
+              requestId: (json['iceCandidate'] as Map<String, dynamic>)['requestId'] as String,
+              candidate: (json['iceCandidate'] as Map<String, dynamic>)['candidate'] as String,
+              sdpMid: (json['iceCandidate'] as Map<String, dynamic>)['sdpMid'] as String,
+              sdpMLineIndex: (json['iceCandidate'] as Map<String, dynamic>)['sdpMLineIndex'] as int,
+            )
+          : null,
+      pingTimestampMs: json['pingTimestampMs'] as int?,
+      pongTimestampMs: json['pongTimestampMs'] as int?,
+    );
+  }
 }
 
 class SignalingPresenceEvent {
@@ -135,6 +235,22 @@ class SignalingPresenceEvent {
     required this.status,
     required this.lastSeenAtMs,
   });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'deviceUri': deviceUri,
+      'status': status,
+      'lastSeenAtMs': lastSeenAtMs,
+    };
+  }
+
+  factory SignalingPresenceEvent.fromJson(Map<String, dynamic> json) {
+    return SignalingPresenceEvent(
+      deviceUri: json['deviceUri'] as String,
+      status: json['status'] as String,
+      lastSeenAtMs: json['lastSeenAtMs'] as int,
+    );
+  }
 }
 
 typedef SignalEnvelope = SignalingEnvelope;

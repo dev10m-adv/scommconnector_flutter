@@ -35,6 +35,8 @@ class AuthRepositoryImpl implements AuthRepository {
     );
 
     await localDataSource.saveTokens(response, userId);
+    /// Save the last used user ID for future token retrieval attempts
+    await localDataSource.saveLastUsedUserId(userId);
     return response.toEntity();
   }
 
@@ -52,6 +54,8 @@ class AuthRepositoryImpl implements AuthRepository {
     );
 
     await localDataSource.saveTokens(response, userId);
+    /// Save the last used user ID for future token retrieval attempts
+    await localDataSource.saveLastUsedUserId(userId);
     return response.toEntity();
   }
 
@@ -68,6 +72,8 @@ class AuthRepositoryImpl implements AuthRepository {
     );
 
     await localDataSource.saveTokens(response, userId);
+    /// Save the last used user ID for future token retrieval attempts
+    await localDataSource.saveLastUsedUserId(userId);
     return response.toEntity();
   }
 
@@ -120,5 +126,15 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<void> clearUserToken({required String userId}) async {
     await localDataSource.clearUserToken(userId);
+  }
+  
+  @override
+  Future<String?> getLastUsedUserId() {
+    return localDataSource.getLastUsedUserId();
+  }
+  
+  @override
+  Future<void> removeLastUsedUserId() {
+    return localDataSource.removeLastUsedUserId();
   }
 }

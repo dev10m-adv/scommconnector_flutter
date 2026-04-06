@@ -36,4 +36,28 @@ class WebRtcState {
       error: clearError ? null : (error ?? this.error),
     );
   }
+
+  factory WebRtcState.initial() {
+    return const WebRtcState();
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'status': status.toString(),
+      'retryCount': retryCount,
+      'message': message,
+      'error': error,
+    };
+  }
+
+  factory WebRtcState.fromJson(Map<String, dynamic> json) {
+    return WebRtcState(
+      status: WebRtcStatus.values.firstWhere(
+          (e) => e.toString() == json['status'],
+          orElse: () => WebRtcStatus.idle),
+      retryCount: json['retryCount'] ?? 0,
+      message: json['message'],
+      error: json['error'],
+    );
+  }
 }

@@ -34,7 +34,7 @@ Future<void> identityDI(
 
   /// Local
   sl.registerLazySingleton<IdentityLocalDataSource>(
-    IdentityLocalDataSourceImpl.new,
+    () => IdentityLocalDataSourceImpl(secureStorage: sl()),
   );
 
   /// Repository

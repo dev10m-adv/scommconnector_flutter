@@ -1,5 +1,7 @@
 import 'package:get_it/get_it.dart';
 import 'package:scommconnector/features/auth/auth.dart';
+import 'package:scommconnector/features/auth/domain/usecases/get_last_userId_usecase.dart';
+import 'package:scommconnector/features/auth/domain/usecases/remove_last_user_usecase.dart';
 
 Future<void> authDI(
   GetIt sl,
@@ -45,4 +47,12 @@ Future<void> authDI(
   sl.registerLazySingleton(() => ExchangeImapCredentialsUseCase(sl()));
   sl.registerLazySingleton(() => GetAccessTokenUseCase(sl()));
   sl.registerLazySingleton(() => RefreshAccessTokenUseCase(sl()));
+  sl.registerLazySingleton(() => GetLastUsedUserIdUseCase(sl()));
+  sl.registerLazySingleton(() => RemoveLastUserUsecase(sl()));
+
+
+  /// controller
+  sl.registerLazySingleton<ScommAuthController>(
+    () => ScommAuthController(),
+  );
 }

@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:scommconnector/core/di/service_locator.dart';
+import 'package:scommconnector/features/auth/domain/usecases/remove_last_user_usecase.dart';
 
 import '../../../../core/errors/errors.dart';
 import '../../domain/entities/auth_tokens.dart';
@@ -10,21 +13,39 @@ import '../../domain/usecases/params/exchange_external_token_params.dart';
 import '../../domain/usecases/params/exchange_imap_credentials_params.dart';
 import '../../domain/usecases/params/refresh_access_token_params.dart';
 import '../../domain/usecases/refresh_access_token_usecase.dart';
+import '../../domain/usecases/get_last_userId_usecase.dart';
 import '../state/auth_state.dart';
 
 class ScommAuthController {
-  AuthState _state = const AuthState();
+  static final ScommAuthController _instance = ScommAuthController._internal();
 
-  ScommAuthController();
+  AuthState _state = AuthState.initial();
+
+  factory ScommAuthController() => _instance;
+
+  ScommAuthController._internal();
 
   final ExchangeExternalTokenUseCase _exchangeExternalTokenUseCase =
-      getIt<ExchangeExternalTokenUseCase>();
+      scommDi<ExchangeExternalTokenUseCase>();
   final ExchangeImapCredentialsUseCase _exchangeImapCredentialsUseCase =
-      getIt<ExchangeImapCredentialsUseCase>();
+      scommDi<ExchangeImapCredentialsUseCase>();
   final RefreshAccessTokenUseCase _refreshAccessTokenUseCase =
-      getIt<RefreshAccessTokenUseCase>();
+      scommDi<RefreshAccessTokenUseCase>();
   final GetAccessTokenUseCase _getAccessTokenUseCase =
-      getIt<GetAccessTokenUseCase>();
+      scommDi<GetAccessTokenUseCase>();
+  final GetLastUsedUserIdUseCase _getLastUsedUserIdUseCase =
+      scommDi<GetLastUsedUserIdUseCase>();
+
+  final RemoveLastUserUsecase _removeLastUserUsecase =
+      scommDi<RemoveLastUserUsecase>();
+
+  final _authStateStream = StreamController<AuthState>.broadcast();
+  Stream<AuthState> get authStates => _authStateStream.stream;
+
+  void _notify(AuthState newState) {
+    _state = newState;
+    _authStateStream.add(_state);
+  }
 
   AuthState get state => _state;
 
@@ -36,6 +57,7 @@ class ScommAuthController {
     _setLoading();
 
     try {
+
       final tokens = await _exchangeExternalTokenUseCase(
         ExchangeExternalTokenParams(
           provider: provider,
@@ -43,42 +65,88 @@ class ScommAuthController {
           userId: userId,
         ),
       );
-      _setAuthenticated(tokens);
-      getIt<AuthSessionState>().setAccessToken(tokens.accessToken);
+      _setAuthenticated(tokens, userId);
+      scommDi<AuthSessionState>().setAccessToken(tokens.accessToken);
     } catch (error) {
       _setFailure(error);
-      rethrow;
+      // rethrow;
     }
   }
 
+  Future<void> logout() async {
+    _notify(_state.copyWith(isLoading: false, isLoggedIn: false, error: null));
+    scommDi<AuthSessionState>().setAccessToken('');
+    await _removeLastUserUsecase.call();
+  }
+
+  Future<void> init() async {
+    print('Initializing authentication state...');
+    // await _removeLastUserUsecase.call();
+    final userId = await _getLastUsedUserIdUseCase.call();
+    print('Last used userId: $userId');
+    if (userId == null) {
+      _notify(_state.copyWith(
+        isLoading: false,
+        isLoggedIn: false,
+        error: null,
+        clearError: true
+      ));
+      return;
+    }
+    final token = await _getAccessToken(userId: userId);
+    print('Retrieved stored access token: $token');
+    if (token == null || token.isEmpty) {
+      _notify(_state.copyWith(
+        isLoading: false,
+        isLoggedIn: false,
+        error: 'No stored access token found. Please log in.',
+      ));
+      return;
+    }
+    _notify(_state.copyWith(
+      isLoading: false,
+      isLoggedIn: true,
+      error: null,
+      userId: userId
+    ));
+    scommDi<AuthSessionState>().setAccessToken(token);
+  }
 
   Future<void> initialize(String userId) async {
     try {
-      final token = await getAccessToken(userId: userId);
+      final token = await _getAccessToken(userId: userId);
+      print('Retrieved stored access token for $userId: $token');
       if (token == null || token.isEmpty) {
-        _state = _state.copyWith(status: AuthStatus.failure, error: 'No stored access token found.');
+        _notify(_state.copyWith(
+          isLoading: false,
+          isLoggedIn: false,
+          error: 'No stored access token found. Please log in.',
+        ));
         return;
       }
-      _state = _state.copyWith(
-        status: AuthStatus.authenticated,
-        tokens: AuthTokens(accessToken: token, refreshToken: ''),
-      );
-      getIt<AuthSessionState>().setAccessToken(token);
+      _notify(_state.copyWith(
+        isLoading: false,
+        isLoggedIn: true,
+        error: null,
+      ));
+      scommDi<AuthSessionState>().setAccessToken(token);
     } on UnauthorizedException {
-      _state = _state.copyWith(status: AuthStatus.failure, error: 'Stored token expired. Re-authentication required.');
+      _notify(_state.copyWith(
+        isLoading: false,
+        isLoggedIn: false,
+        error: 'Stored token expired. Re-authentication required.',
+      ));
     } catch (error) {
-      _state = _state.copyWith(
-        status: AuthStatus.failure,
-        error: 'Unable to read stored token: $error',
-      );
+      _notify(_state.copyWith(
+        isLoading: false,
+        isLoggedIn: false,
+        error: 'Failed to initialize authentication: ${error.toString()}',
+      ));
     }
   }
 
-  Future<void> exchangeImapLogin({
-    required ImapCredentials credentials,
-  }) async {
+  Future<void> exchangeImapLogin({required ImapCredentials credentials}) async {
     _setLoading();
-
     try {
       print('Exchanging IMAP credentials for tokens...');
       final tokens = await _exchangeImapCredentialsUseCase(
@@ -88,8 +156,8 @@ class ScommAuthController {
           userId: credentials.userId,
         ),
       );
-      _setAuthenticated(tokens);
-      getIt<AuthSessionState>().setAccessToken(tokens.accessToken);
+      _setAuthenticated(tokens, credentials.userId);
+      scommDi<AuthSessionState>().setAccessToken(tokens.accessToken);
     } catch (error) {
       _setFailure(error);
       rethrow;
@@ -106,35 +174,28 @@ class ScommAuthController {
       final tokens = await _refreshAccessTokenUseCase(
         RefreshAccessTokenParams(refreshToken: refreshToken, userId: userId),
       );
-      _setAuthenticated(tokens);
-      getIt<AuthSessionState>().setAccessToken(tokens.accessToken);
+      _setAuthenticated(tokens, userId);
+      scommDi<AuthSessionState>().setAccessToken(tokens.accessToken);
     } catch (error) {
       _setFailure(error);
       rethrow;
     }
   }
 
-  Future<String?> getAccessToken({required String userId}) {
+  Future<String?> _getAccessToken({required String userId}) {
     return _getAccessTokenUseCase(userId);
   }
 
   void _setLoading() {
-    _state = _state.copyWith(status: AuthStatus.loading, clearError: true);
+    _notify(_state.copyWith(clearError: true, isLoading: true, error: null));
   }
 
-  void _setAuthenticated(AuthTokens tokens) {
-    _state = _state.copyWith(
-      status: AuthStatus.authenticated,
-      tokens: tokens,
-      clearError: true,
-    );
+  void _setAuthenticated(AuthTokens tokens, String? userId) {
+    _notify(_state.copyWith(clearError: true, isLoading: false, isLoggedIn: true, error: null, userId: userId));
   }
 
   void _setFailure(Object error) {
-    _state = _state.copyWith(
-      status: AuthStatus.failure,
-      error: _toUserMessage(error),
-    );
+    _notify(_state.copyWith(clearError: false, isLoading: false, isLoggedIn: false, error: _toUserMessage(error)));
   }
 
   String _toUserMessage(Object error) {
@@ -143,18 +204,5 @@ class ScommAuthController {
     }
 
     return 'Authentication request failed. Please try again.';
-  }
-
-  bool isAuthenticatedSync() {
-    return _state.status == AuthStatus.authenticated && _state.tokens != null;
-  }
-
-  Future<bool> isAuthenticated(String userId) async {
-    try {
-      final token = await getAccessToken(userId: userId);
-      return token != null && token.isNotEmpty;
-    } catch (_) {
-      return false;
-    }
   }
 }

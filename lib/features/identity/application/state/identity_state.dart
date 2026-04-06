@@ -8,6 +8,7 @@ class IdentityState {
   final IdentityStatus status;
   final IdentityDevice? device;
   final List<IdentityDevice> devices;
+  final bool isRegistered;
   final DeviceService? service;
   final List<DeviceService> services;
   final String? message;
@@ -17,6 +18,7 @@ class IdentityState {
   const IdentityState({
     this.status = IdentityStatus.initial,
     this.device,
+    this.isRegistered = false,
     this.devices = const [],
     this.service,
     this.services = const [],
@@ -32,6 +34,7 @@ class IdentityState {
     DeviceService? service,
     List<DeviceService>? services,
     String? message,
+    bool? isRegistered,
     String? error,
     SavedDeviceIdentity? savedDeviceIdentity,
     bool clearDevice = false,
@@ -46,6 +49,7 @@ class IdentityState {
       status: status ?? this.status,
       device: clearDevice ? null : (device ?? this.device),
       devices: clearDevices ? const [] : (devices ?? this.devices),
+      isRegistered: isRegistered ?? this.isRegistered,
       service: clearService ? null : (service ?? this.service),
       services: clearServices ? const [] : (services ?? this.services),
       message: clearMessage ? null : (message ?? this.message),
@@ -53,6 +57,54 @@ class IdentityState {
       savedDeviceIdentity: clearSavedDeviceIdentity
           ? null
           : (savedDeviceIdentity ?? this.savedDeviceIdentity),
+    );
+  }
+
+  factory IdentityState.initial() {
+    return const IdentityState();
+  }
+
+
+  Map<String, dynamic> toJson() {
+    return {
+      'status': status.toString(),
+      'device': device?.toJson(),
+      'devices': devices.map((d) => d.toJson()).toList(),
+      'isRegistered': isRegistered,
+      'service': service?.toJson(),
+      'services': services.map((s) => s.toJson()).toList(),
+      'message': message,
+      'error': error,
+      'savedDeviceIdentity': savedDeviceIdentity?.toJson(),
+    };
+  }
+
+  factory IdentityState.fromJson(Map<String, dynamic> json) {
+    return IdentityState(
+      status: IdentityStatus.values.firstWhere(
+        (e) => e.toString() == json['status'],
+        orElse: () => IdentityStatus.initial,
+      ),
+      device: json['device'] != null
+          ? IdentityDevice.fromJson(json['device'])
+          : null,
+      devices: (json['devices'] as List<dynamic>?)
+              ?.map((d) => IdentityDevice.fromJson(d))
+              .toList() ??
+          [],
+      isRegistered: json['isRegistered'] ?? false,
+      service: json['service'] != null
+          ? DeviceService.fromJson(json['service'])
+          : null,
+      services: (json['services'] as List<dynamic>?)
+              ?.map((s) => DeviceService.fromJson(s))
+              .toList() ??
+          [],
+      message: json['message'],
+      error: json['error'],
+      savedDeviceIdentity: json['savedDeviceIdentity'] != null
+          ? SavedDeviceIdentity.fromJson(json['savedDeviceIdentity'])
+          : null,
     );
   }
 }

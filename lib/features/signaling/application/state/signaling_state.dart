@@ -31,4 +31,26 @@ class SignalingState {
       error: clearError ? null : (error ?? this.error),
     );
   }
+
+  factory SignalingState.initial() {
+    return const SignalingState();
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'status': status.toString(),
+      'message': message,
+      'error': error,
+    };
+  }
+
+  factory SignalingState.fromJson(Map<String, dynamic> json) {
+    return SignalingState(
+      status: SignalingStatus.values.firstWhere(
+          (e) => e.toString() == json['status'],
+          orElse: () => SignalingStatus.initial),
+      message: json['message'],
+      error: json['error'],
+    );
+  }
 }
