@@ -5,6 +5,7 @@ export 'data/services/webrtc_peer_service.dart';
 export 'domain/entities/webrtc_connection_state.dart';
 export 'domain/entities/webrtc_data_message.dart';
 export 'domain/entities/webrtc_ice_candidate.dart';
+export 'domain/entities/webrtc_ice_route.dart';
 export 'domain/entities/webrtc_ice_server_config.dart';
 export 'domain/entities/webrtc_session_description.dart';
 export 'domain/repositories/webrtc_repository.dart';

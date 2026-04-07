@@ -8,6 +8,7 @@ import '../../../../core/resilience/online_aware_resilience.dart';
 import '../../domain/entities/webrtc_connection_state.dart';
 import '../../domain/entities/webrtc_data_message.dart';
 import '../../domain/entities/webrtc_ice_candidate.dart';
+import '../../domain/entities/webrtc_ice_route.dart';
 import '../../domain/entities/webrtc_ice_server_config.dart';
 import '../../domain/entities/webrtc_session_description.dart';
 import '../../domain/usecases/add_data_channel_usecase.dart';
@@ -78,7 +79,9 @@ class WebRtcController {
   Stream<WebRtcState> get webRtcStates => _stateController.stream;
   Stream<WebRtcIceCandidate> get localIceCandidates =>
       repository.localIceCandidates;
-      
+  Stream<WebRtcIceRoute> get iceRoutes => repository.iceRoutes;
+  WebRtcIceRoute get iceRoute => repository.iceRoute;
+
   Future<void> initialize({
     required List<String> dataChannels,
     List<WebRtcIceServerConfig>? iceServers,
@@ -86,12 +89,14 @@ class WebRtcController {
     infoLog(
       'WebRTC controller initialize requested channels=${dataChannels.length}.',
     );
-    _emitState(_state.copyWith(
-      status: WebRtcStatus.initializing,
-      clearError: true,
-      clearMessage: true,
-      retryCount: 0,
-    ));
+    _emitState(
+      _state.copyWith(
+        status: WebRtcStatus.initializing,
+        clearError: true,
+        clearMessage: true,
+        retryCount: 0,
+      ),
+    );
 
     try {
       await initializeWebRtcUseCase(
@@ -99,16 +104,20 @@ class WebRtcController {
         iceServers: iceServers,
       );
       await _bindObservers();
-      _emitState(_state.copyWith(
-        status: WebRtcStatus.negotiating,
-        message: 'Peer connection initialized.',
-      ));
+      _emitState(
+        _state.copyWith(
+          status: WebRtcStatus.negotiating,
+          message: 'Peer connection initialized.',
+        ),
+      );
       infoLog('WebRTC peer initialized and observers bound.');
     } catch (error) {
-      _emitState(_state.copyWith(
-        status: WebRtcStatus.failed,
-        error: _toAppError(error).message,
-      ));
+      _emitState(
+        _state.copyWith(
+          status: WebRtcStatus.failed,
+          error: _toAppError(error).message,
+        ),
+      );
       errorLog('WebRTC initialization failed.', error);
       rethrow;
     }
@@ -119,17 +128,21 @@ class WebRtcController {
   }) async {
     try {
       debugLog('WebRTC createOffer called. iceRestart=$iceRestart.');
-      _emitState(_state.copyWith(
-        status: WebRtcStatus.negotiating,
-        message: iceRestart ? 'Restarting ICE...' : 'Creating offer...',
-        clearError: true,
-      ));
+      _emitState(
+        _state.copyWith(
+          status: WebRtcStatus.negotiating,
+          message: iceRestart ? 'Restarting ICE...' : 'Creating offer...',
+          clearError: true,
+        ),
+      );
       return await createWebRtcOfferUseCase(iceRestart: iceRestart);
     } catch (error) {
-      _emitState(_state.copyWith(
-        status: WebRtcStatus.failed,
-        error: _toAppError(error).message,
-      ));
+      _emitState(
+        _state.copyWith(
+          status: WebRtcStatus.failed,
+          error: _toAppError(error).message,
+        ),
+      );
       errorLog('WebRTC createOffer failed.', error);
       rethrow;
     }
@@ -140,17 +153,21 @@ class WebRtcController {
   ) async {
     try {
       debugLog('WebRTC createAnswerForOffer called for type=${offer.type}.');
-      _emitState(_state.copyWith(
-        status: WebRtcStatus.negotiating,
-        message: 'Creating answer...',
-        clearError: true,
-      ));
+      _emitState(
+        _state.copyWith(
+          status: WebRtcStatus.negotiating,
+          message: 'Creating answer...',
+          clearError: true,
+        ),
+      );
       return await createWebRtcAnswerUseCase(offer);
     } catch (error) {
-      _emitState(_state.copyWith(
-        status: WebRtcStatus.failed,
-        error: _toAppError(error).message,
-      ));
+      _emitState(
+        _state.copyWith(
+          status: WebRtcStatus.failed,
+          error: _toAppError(error).message,
+        ),
+      );
       errorLog('WebRTC createAnswerForOffer failed.', error);
       rethrow;
     }
@@ -173,13 +190,18 @@ class WebRtcController {
     return removeDataChannelUseCase(label);
   }
 
-  Stream<WebRtcConnectionState> get connectionStates => connectionStateUseCase();
+  Stream<WebRtcConnectionState> get connectionStates =>
+      connectionStateUseCase();
   Stream<WebRtcDataMessage> get receivedDataMessages => repository.dataMessages;
   Future<void> sendData({
     required String channelLabel,
     required String message,
   }) {
     return sendWebRtcDataUseCase(channelLabel: channelLabel, message: message);
+  }
+
+  Future<WebRtcIceRoute> refreshIceRoute() {
+    return repository.refreshIceRoute();
   }
 
   Future<void> close() async {
@@ -191,11 +213,13 @@ class WebRtcController {
       _connectionStateSubscription = null;
       await closeWebRtcUseCase();
 
-      _emitState(_state.copyWith(
-        status: WebRtcStatus.closed,
-        message: 'WebRTC closed.',
-        clearError: true,
-      ));
+      _emitState(
+        _state.copyWith(
+          status: WebRtcStatus.closed,
+          message: 'WebRTC closed.',
+          clearError: true,
+        ),
+      );
       infoLog('WebRTC controller closed.');
     } finally {
       _closingInProgress = false;
@@ -223,24 +247,28 @@ class WebRtcController {
 
       switch (connectionState) {
         case WebRtcConnectionState.connected:
-          _emitState(_state.copyWith(
-            status: WebRtcStatus.connected,
-            retryCount: 0,
-            message: 'Connected.',
-            clearError: true,
-          ));
+          _emitState(
+            _state.copyWith(
+              status: WebRtcStatus.connected,
+              retryCount: 0,
+              message: 'Connected.',
+              clearError: true,
+            ),
+          );
           infoLog('WebRTC connection established.');
           break;
         case WebRtcConnectionState.disconnected:
         case WebRtcConnectionState.failed:
           warningLog('WebRTC connection degraded: state=$connectionState.');
-          _emitState(_state.copyWith(
-            status: WebRtcStatus.retrying,
-            message: connectionState == WebRtcConnectionState.failed
-                ? 'Connection failed. Attempting recovery...'
-                : 'Connection lost. Attempting recovery...',
-            clearError: true,
-          ));
+          _emitState(
+            _state.copyWith(
+              status: WebRtcStatus.retrying,
+              message: connectionState == WebRtcConnectionState.failed
+                  ? 'Connection failed. Attempting recovery...'
+                  : 'Connection lost. Attempting recovery...',
+              clearError: true,
+            ),
+          );
           _triggerRecovery();
           break;
         case WebRtcConnectionState.closed:
@@ -268,10 +296,12 @@ class WebRtcController {
       return;
     }
 
-    _emitState(_state.copyWith(
-      status: WebRtcStatus.retrying,
-      message: 'Internet recovered. Attempting recovery...',
-    ));
+    _emitState(
+      _state.copyWith(
+        status: WebRtcStatus.retrying,
+        message: 'Internet recovered. Attempting recovery...',
+      ),
+    );
 
     try {
       infoLog('Internet recovered, triggering WebRTC recovery.');
@@ -292,10 +322,12 @@ class WebRtcController {
       await recoveryStrategy.recover();
       infoLog('WebRTC recovery attempt finished.');
     } catch (error) {
-      _emitState(_state.copyWith(
-        status: WebRtcStatus.failed,
-        error: _toAppError(error).message,
-      ));
+      _emitState(
+        _state.copyWith(
+          status: WebRtcStatus.failed,
+          error: _toAppError(error).message,
+        ),
+      );
       errorLog('WebRTC recovery failed.', error);
     }
   }

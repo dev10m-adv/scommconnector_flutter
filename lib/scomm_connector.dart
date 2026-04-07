@@ -12,6 +12,7 @@ export 'package:scommconnector/features/connect/datachannel/scomm_datachannel_pr
 export 'package:scommconnector/features/connect/datachannel/scomm_message_router.dart';
 export 'package:scommconnector/features/connect/datachannel/scomm_datachannel_transport.dart';
 export 'package:scommconnector/features/connect/datachannel/scomm_datachannel_controller.dart';
+export 'package:scommconnector/features/connect/datachannel/scomm_transfer_speed.dart';
 
 
 import 'package:scommconnector/core/di/service_locator.dart';

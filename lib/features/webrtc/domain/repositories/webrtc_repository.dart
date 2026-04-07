@@ -1,13 +1,16 @@
 import '../entities/webrtc_connection_state.dart';
 import '../entities/webrtc_data_message.dart';
 import '../entities/webrtc_ice_candidate.dart';
+import '../entities/webrtc_ice_route.dart';
 import '../entities/webrtc_ice_server_config.dart';
 import '../entities/webrtc_session_description.dart';
 
 abstract class WebRtcRepository {
   Stream<WebRtcConnectionState> get connectionStates;
   Stream<WebRtcIceCandidate> get localIceCandidates;
+  Stream<WebRtcIceRoute> get iceRoutes;
   Stream<WebRtcDataMessage> get dataMessages;
+  WebRtcIceRoute get iceRoute;
 
   Future<void> initialize({
     required List<String> dataChannelLabels,
@@ -32,6 +35,8 @@ abstract class WebRtcRepository {
     required String channelLabel,
     required String message,
   });
+
+  Future<WebRtcIceRoute> refreshIceRoute();
 
   Future<WebRtcSessionDescription> restartIceAndCreateOffer();
 

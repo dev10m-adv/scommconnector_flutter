@@ -1,6 +1,7 @@
 import '../../domain/entities/webrtc_connection_state.dart';
 import '../../domain/entities/webrtc_data_message.dart';
 import '../../domain/entities/webrtc_ice_candidate.dart';
+import '../../domain/entities/webrtc_ice_route.dart';
 import '../../domain/entities/webrtc_ice_server_config.dart';
 import '../../domain/entities/webrtc_session_description.dart';
 import '../../domain/repositories/webrtc_repository.dart';
@@ -20,7 +21,13 @@ class WebRtcRepositoryImpl implements WebRtcRepository {
       peerService.localIceCandidates;
 
   @override
+  Stream<WebRtcIceRoute> get iceRoutes => peerService.iceRoutes;
+
+  @override
   Stream<WebRtcDataMessage> get dataMessages => peerService.dataMessages;
+
+  @override
+  WebRtcIceRoute get iceRoute => peerService.iceRoute;
 
   @override
   Future<void> initialize({
@@ -71,6 +78,11 @@ class WebRtcRepositoryImpl implements WebRtcRepository {
     required String message,
   }) {
     return peerService.sendData(channelLabel: channelLabel, message: message);
+  }
+
+  @override
+  Future<WebRtcIceRoute> refreshIceRoute() {
+    return peerService.refreshIceRoute();
   }
 
   @override

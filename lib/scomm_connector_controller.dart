@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:scommconnector/features/auth/auth.dart';
 import 'package:scommconnector/features/identity/identity.dart';
 import 'package:scommconnector/features/scomm_session_state.dart';
@@ -9,6 +10,7 @@ import 'package:scommconnector/features/connect/connect_controller.dart';
 import 'package:scommconnector/features/connect/datachannel/scomm_datachannel_controller.dart';
 import 'package:scommconnector/features/connect/datachannel/scomm_datachannel_protocol.dart';
 import 'package:scommconnector/features/connect/datachannel/scomm_datachannel_transport.dart';
+import 'package:scommconnector/features/connect/datachannel/scomm_transfer_speed.dart';
 import 'package:scommconnector/scomm_start_config.dart';
 
 /////// Main public API surface of the ScommConnector package. This class is a singleton
@@ -21,16 +23,16 @@ class ScommConnectorController {
       ScommConnectorController._internal();
   factory ScommConnectorController() => _instance;
 
-
   StreamSubscription? _authSub;
   StreamSubscription? _identitySub;
   StreamSubscription? _signalingSub;
   StreamSubscription? _webrtcSub;
+  StreamSubscription<WebRtcIceRoute>? _iceRouteSubscription;
 
   ScommConnectorController._internal() {
     _datachannelController = ScommDatachannelController(
       transport: ScommDataChannelTransport(
-        sendRawMessage: _webrtccontroller.sendData,
+        sendRawMessage: _sendTrackedRawMessage,
         isConnected: _canSendDataChannel,
       ),
     );
@@ -39,6 +41,7 @@ class ScommConnectorController {
         _stateChangesController.add(null);
       }
     });
+    _startTransferSpeedTicker();
   }
 
   final _webrtccontroller = scommDi<WebRtcController>();
@@ -50,17 +53,30 @@ class ScommConnectorController {
   StreamSubscription<WebRtcDataMessage>? _dataMessageSubscription;
   StreamSubscription<AuthState>? _authStateSubscription;
   final _incomingRequestCache = <String, SignalEnvelope>{};
-
+  Timer? _transferSpeedTimer;
+  int _sentBytesSinceLastTick = 0;
+  int _receivedBytesSinceLastTick = 0;
+  ScommTransferSpeed _transferSpeed = const ScommTransferSpeed();
+  WebRtcIceRoute _iceRoute = const WebRtcIceRoute();
+  final _transferSpeedController =
+      StreamController<ScommTransferSpeed>.broadcast();
+  final _iceRouteController = StreamController<WebRtcIceRoute>.broadcast();
 
   ///// Exposed state and streams for consumers.
   ScommSessionState _sessionState = ScommSessionState.initial();
-  final _sessionStateController = StreamController<ScommSessionState>.broadcast();
+  final _sessionStateController =
+      StreamController<ScommSessionState>.broadcast();
 
   ScommSessionState get sessionState => _sessionState;
   Stream<ScommSessionState> get stream => _sessionStateController.stream;
+  ScommTransferSpeed get transferSpeed => _transferSpeed;
+  Stream<ScommTransferSpeed> get transferSpeeds =>
+      _transferSpeedController.stream;
+  WebRtcIceRoute get iceRoute => _iceRoute;
+  Stream<WebRtcIceRoute> get iceRoutes => _iceRouteController.stream;
 
   // Snapshot states for consumers that need synchronous reads.
-  
+
   IdentityState get identityState => _identityController.state;
   WebRtcState get webrtcState => _webrtccontroller.state;
   SignalingState get signalingState =>
@@ -99,7 +115,6 @@ class ScommConnectorController {
     );
   }
 
-
   ///////// Authentication methods ///////////
 
   Future<void> initialize() async {
@@ -109,11 +124,13 @@ class ScommConnectorController {
     await _identitySub?.cancel();
     await _signalingSub?.cancel();
     await _webrtcSub?.cancel();
+    await _iceRouteSubscription?.cancel();
 
     _authSub = _authController.authStates.listen((_) => _syncSessionState());
     _identitySub = _identityController.identityStates.listen((_) => _syncSessionState());
     _signalingSub = _connectController.signalingController.signalingStates.listen((_) => _syncSessionState());
     _webrtcSub = _webrtccontroller.webRtcStates.listen((_) => _syncSessionState());
+    _iceRouteSubscription = _webrtccontroller.iceRoutes.listen((route) {_setIceRoute(route);});
 
     _syncSessionState();
   }
@@ -159,7 +176,9 @@ class ScommConnectorController {
     String deviceType,
     DeviceMode mode,
   ) async {
-    print('Registering device with name="$deviceName", type="$deviceType", mode="$mode"');
+    print(
+      'Registering device with name="$deviceName", type="$deviceType", mode="$mode"',
+    );
     await _identityController.registerDevice(
       deviceName: deviceName,
       deviceType: deviceType,
@@ -280,12 +299,15 @@ class ScommConnectorController {
       if (message.channelLabel != ScommDataChannelTransport.mainChannel) {
         return;
       }
+      _recordReceivedPayload(message.message);
       _datachannelController.receiveRawMessage(message.message);
     });
   }
 
   Future<void> stop() async {
     _incomingRequestCache.clear();
+    _resetTransferSpeed();
+    _setIceRoute(const WebRtcIceRoute());
     await _connectController.stop();
   }
 
@@ -294,9 +316,13 @@ class ScommConnectorController {
     await _identitySub?.cancel();
     await _signalingSub?.cancel();
     await _webrtcSub?.cancel();
+    await _iceRouteSubscription?.cancel();
     await _authStateSubscription?.cancel();
     await _dataMessageSubscription?.cancel();
     _dataMessageSubscription = null;
+    _transferSpeedTimer?.cancel();
+    await _transferSpeedController.close();
+    await _iceRouteController.close();
     await _stateChangesController.close();
     await _datachannelController.dispose();
     await _sessionStateController.close();
@@ -317,6 +343,10 @@ class ScommConnectorController {
   Stream<WebRtcDataMessage> get webrtcDataMessages =>
       _webrtccontroller.receivedDataMessages;
 
+  Future<WebRtcIceRoute> refreshIceRoute() {
+    return _webrtccontroller.refreshIceRoute();
+  }
+
   Stream<SignalEnvelope> get scommConnectionIncomingRequests =>
       _connectController.incomingConnectionRequests.map((request) {
         final requestId = request.connectionRequest?.requestId;
@@ -334,7 +364,7 @@ class ScommConnectorController {
       _datachannelController.messages;
 
   Future<void> sendMessageOverDataChannel(String message) async {
-    await _webrtccontroller.sendData(
+    await _sendTrackedRawMessage(
       channelLabel: ScommDataChannelTransport.mainChannel,
       message: message,
     );
@@ -493,5 +523,62 @@ class ScommConnectorController {
   bool _isOnlineStatus(String status) {
     final normalized = status.trim().toUpperCase();
     return normalized == 'ONLINE' || normalized == 'AVAILABLE';
+  }
+
+  Future<void> _sendTrackedRawMessage({
+    required String channelLabel,
+    required String message,
+  }) async {
+    _recordSentPayload(message);
+    await _webrtccontroller.sendData(
+      channelLabel: channelLabel,
+      message: message,
+    );
+  }
+
+  void _recordSentPayload(String message) {
+    _sentBytesSinceLastTick += utf8.encode(message).length;
+  }
+
+  void _recordReceivedPayload(String message) {
+    _receivedBytesSinceLastTick += utf8.encode(message).length;
+  }
+
+  void _startTransferSpeedTicker() {
+    _transferSpeedTimer?.cancel();
+    _transferSpeedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _transferSpeed = ScommTransferSpeed(
+        sentBytesPerSecond: _sentBytesSinceLastTick,
+        receivedBytesPerSecond: _receivedBytesSinceLastTick,
+      );
+      _sentBytesSinceLastTick = 0;
+      _receivedBytesSinceLastTick = 0;
+
+      if (!_transferSpeedController.isClosed) {
+        _transferSpeedController.add(_transferSpeed);
+      }
+    });
+  }
+
+  void _resetTransferSpeed() {
+    _sentBytesSinceLastTick = 0;
+    _receivedBytesSinceLastTick = 0;
+    _transferSpeed = const ScommTransferSpeed();
+    if (!_transferSpeedController.isClosed) {
+      _transferSpeedController.add(_transferSpeed);
+    }
+  }
+
+  void _setIceRoute(WebRtcIceRoute next) {
+    if (_iceRoute == next) {
+      return;
+    }
+    _iceRoute = next;
+    if (!_iceRouteController.isClosed) {
+      _iceRouteController.add(next);
+    }
+    if (!_stateChangesController.isClosed) {
+      _stateChangesController.add(null);
+    }
   }
 }

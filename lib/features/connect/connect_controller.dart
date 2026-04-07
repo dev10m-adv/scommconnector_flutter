@@ -5,6 +5,7 @@ import 'package:scommconnector/features/webrtc/domain/entities/webrtc_ice_server
 import '../signaling/application/controllers/signaling_controller.dart';
 import '../signaling/domain/entities/signaling_entities.dart';
 import '../webrtc/application/controllers/webrtc_controller.dart';
+import '../webrtc/application/state/webrtc_state.dart';
 import '../webrtc/domain/entities/webrtc_ice_candidate.dart';
 import '../webrtc/domain/entities/webrtc_session_description.dart';
 
@@ -16,16 +17,19 @@ class ConnectController {
     required this.webRtcController,
   });
 
-
   StreamSubscription<SignalEnvelope>? _signalingSubscription;
   StreamSubscription<WebRtcIceCandidate>? _localIceSubscription;
   String? _localUri;
   String? _remoteUri;
   String? _activeRequestId;
+  List<String> _configuredDataChannels = const [];
+  List<WebRtcIceServerConfig> _configuredIceServers = const [];
+  int _webrtcSessionGeneration = 0;
 
-  final _incomingConnectionRequests = StreamController<SignalEnvelope>.broadcast();
-  Stream<SignalEnvelope> get incomingConnectionRequests => _incomingConnectionRequests.stream;
-
+  final _incomingConnectionRequests =
+      StreamController<SignalEnvelope>.broadcast();
+  Stream<SignalEnvelope> get incomingConnectionRequests =>
+      _incomingConnectionRequests.stream;
 
   bool _isSignalingStart = false;
 
@@ -36,6 +40,8 @@ class ConnectController {
     List<WebRtcIceServerConfig> iceServers = const [],
   }) async {
     _localUri = localUri;
+    _configuredDataChannels = List<String>.from(dataChannels);
+    _configuredIceServers = List<WebRtcIceServerConfig>.from(iceServers);
     if (_isSignalingStart) {
       print('Signaling stack is already started.');
       return;
@@ -55,10 +61,7 @@ class ConnectController {
         },
       );
 
-      await webRtcController.initialize(
-        dataChannels: dataChannels,
-        iceServers: iceServers,
-      );
+      await _initializeWebRtcSession(reason: 'start');
 
       await _localIceSubscription?.cancel();
       _localIceSubscription = webRtcController.localIceCandidates.listen(
@@ -96,6 +99,13 @@ class ConnectController {
     String note = '',
     Duration timeout = const Duration(seconds: 12),
   }) async {
+    if (_shouldDropOutgoingRequest(toUri: toUri)) {
+      print(
+        'Dropping outgoing connection request to $toUri because WebRTC is already connected for activeRequestId=$_activeRequestId remoteUri=$_remoteUri.',
+      );
+      return;
+    }
+
     final fromUri = _requireLocalUri();
     final requestId = _buildRequestId();
 
@@ -158,6 +168,19 @@ class ConnectController {
     try {
       switch (envelope.payloadType) {
         case SignalingPayloadType.connectionRequest:
+          final connectionRequest = envelope.connectionRequest;
+          final requestRemoteUri = envelope.from?.uri;
+          if (connectionRequest != null &&
+              requestRemoteUri != null &&
+              _shouldDropIncomingRequest(
+                remoteUri: requestRemoteUri,
+                requestId: connectionRequest.requestId,
+              )) {
+            print(
+              'Dropping incoming connection request from $requestRemoteUri requestId=${connectionRequest.requestId} because WebRTC is already connected for activeRequestId=$_activeRequestId remoteUri=$_remoteUri.',
+            );
+            break;
+          }
           _incomingConnectionRequests.add(envelope);
           break;
 
@@ -174,14 +197,32 @@ class ConnectController {
             sdp: remoteOffer.sdp,
           );
 
-          _remoteUri = envelope.from?.uri;
-          _activeRequestId = remoteOffer.requestId;
-
-          if (_remoteUri == null || _activeRequestId == null) {
+          final remoteUri = envelope.from?.uri;
+          final requestId = remoteOffer.requestId;
+          if (remoteUri == null || requestId.isEmpty) {
             break;
           }
 
-          final answer = await webRtcController.createAnswerForOffer(offer);
+          if (_shouldDropIncomingRequest(
+            remoteUri: remoteUri,
+            requestId: requestId,
+          )) {
+            print(
+              'Dropping incoming offer from $remoteUri requestId=$requestId because WebRTC is already connected for activeRequestId=$_activeRequestId remoteUri=$_remoteUri.',
+            );
+            break;
+          }
+
+          print(
+            'Incoming offer context: currentRequestId=$_activeRequestId currentRemoteUri=$_remoteUri incomingRequestId=$requestId incomingRemoteUri=$remoteUri webrtcSessionGeneration=$_webrtcSessionGeneration',
+          );
+
+          await _prepareForIncomingOffer(
+            remoteUri: remoteUri,
+            requestId: requestId,
+          );
+
+          final answer = await _createAnswerForIncomingOffer(offer);
           print("Created Answer for offer with requestId ${answer.type}");
           await _sendAnswer(
             answer: answer,
@@ -228,7 +269,9 @@ class ConnectController {
           break;
       }
     } catch (e) {
-      print('Error handling signaling envelope: $e');
+      print(
+        'Error handling signaling envelope: payload=${envelope.payloadType} activeRequestId=$_activeRequestId remoteUri=$_remoteUri webrtcSessionGeneration=$_webrtcSessionGeneration error=$e',
+      );
     }
   }
 
@@ -296,5 +339,105 @@ class ConnectController {
 
   String _buildRequestId() {
     return DateTime.now().microsecondsSinceEpoch.toString();
+  }
+
+  Future<void> _prepareForIncomingOffer({
+    required String remoteUri,
+    required String requestId,
+  }) async {
+    final isFreshRemoteSession =
+        _activeRequestId != null &&
+        (_activeRequestId != requestId || _remoteUri != remoteUri);
+
+    print(
+      'Preparing incoming offer: activeRequestId=$_activeRequestId activeRemoteUri=$_remoteUri incomingRequestId=$requestId incomingRemoteUri=$remoteUri isFreshRemoteSession=$isFreshRemoteSession webrtcSessionGeneration=$_webrtcSessionGeneration',
+    );
+
+    if (isFreshRemoteSession) {
+      print(
+        'Resetting WebRTC session for fresh incoming offer requestId $requestId.',
+      );
+      await _resetWebRtcSession();
+    }
+
+    _remoteUri = remoteUri;
+    _activeRequestId = requestId;
+  }
+
+  Future<WebRtcSessionDescription> _createAnswerForIncomingOffer(
+    WebRtcSessionDescription offer,
+  ) async {
+    try {
+      print(
+        'Creating answer for incoming offer on webrtcSessionGeneration=$_webrtcSessionGeneration activeRequestId=$_activeRequestId remoteUri=$_remoteUri',
+      );
+      return await webRtcController.createAnswerForOffer(offer);
+    } catch (error) {
+      print(
+        'createAnswerForIncomingOffer failed on webrtcSessionGeneration=$_webrtcSessionGeneration activeRequestId=$_activeRequestId remoteUri=$_remoteUri error=$error',
+      );
+
+      if (!_isHaveLocalOfferError(error)) {
+        rethrow;
+      }
+
+      print(
+        'Incoming offer collided with a pending local offer. Resetting WebRTC session and retrying. activeRequestId=$_activeRequestId remoteUri=$_remoteUri webrtcSessionGeneration=$_webrtcSessionGeneration',
+      );
+      await _resetWebRtcSession();
+      print(
+        'Retrying createAnswerForOffer after reset on webrtcSessionGeneration=$_webrtcSessionGeneration activeRequestId=$_activeRequestId remoteUri=$_remoteUri',
+      );
+      return webRtcController.createAnswerForOffer(offer);
+    }
+  }
+
+  Future<void> _resetWebRtcSession() async {
+    final nextGeneration = _webrtcSessionGeneration + 1;
+    print(
+      'Resetting WebRTC session: previousGeneration=$_webrtcSessionGeneration nextGeneration=$nextGeneration activeRequestId=$_activeRequestId remoteUri=$_remoteUri dataChannels=${_configuredDataChannels.length} iceServers=${_configuredIceServers.length}',
+    );
+    await webRtcController.close();
+    await _initializeWebRtcSession(reason: 'reset');
+    print(
+      'WebRTC session reset complete: currentGeneration=$_webrtcSessionGeneration activeRequestId=$_activeRequestId remoteUri=$_remoteUri',
+    );
+  }
+
+  Future<void> _initializeWebRtcSession({required String reason}) async {
+    final nextGeneration = _webrtcSessionGeneration + 1;
+    print(
+      'Initializing WebRTC session generation=$nextGeneration reason=$reason dataChannels=${_configuredDataChannels.length} iceServers=${_configuredIceServers.length}',
+    );
+    await webRtcController.initialize(
+      dataChannels: _configuredDataChannels,
+      iceServers: _configuredIceServers,
+    );
+    _webrtcSessionGeneration = nextGeneration;
+    print(
+      'Initialized WebRTC session generation=$_webrtcSessionGeneration reason=$reason',
+    );
+  }
+
+  bool _isHaveLocalOfferError(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('have-local-offer') ||
+        (message.contains('wrong state') && message.contains('local-offer'));
+  }
+
+  bool _shouldDropIncomingRequest({
+    required String remoteUri,
+    required String requestId,
+  }) {
+    return webRtcController.state.status == WebRtcStatus.connected &&
+        _remoteUri == remoteUri &&
+        _activeRequestId != null &&
+        _activeRequestId != requestId;
+  }
+
+  bool _shouldDropOutgoingRequest({required String toUri}) {
+    return webRtcController.state.status == WebRtcStatus.connected &&
+        _remoteUri == toUri &&
+        _activeRequestId != null;
   }
 }

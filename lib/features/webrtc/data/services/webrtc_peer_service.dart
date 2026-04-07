@@ -6,19 +6,36 @@ import '../../../../core/logging/log.dart';
 import '../../domain/entities/webrtc_connection_state.dart';
 import '../../domain/entities/webrtc_data_message.dart';
 import '../../domain/entities/webrtc_ice_candidate.dart';
+import '../../domain/entities/webrtc_ice_route.dart';
 import '../../domain/entities/webrtc_ice_server_config.dart';
 import '../../domain/entities/webrtc_session_description.dart';
+import 'webrtc_ice_route_stats_parser.dart';
+
+typedef WebRtcPeerConnectionFactory =
+    Future<RTCPeerConnection> Function(Map<String, dynamic> configuration);
 
 class WebRtcPeerService {
+  WebRtcPeerService({WebRtcPeerConnectionFactory? peerConnectionFactory})
+    : _peerConnectionFactory =
+          peerConnectionFactory ??
+          ((configuration) => createPeerConnection(configuration));
+
   static const _maxPendingRemoteIceCandidates = 200;
 
+  final WebRtcPeerConnectionFactory _peerConnectionFactory;
+  final WebRtcIceRouteStatsParser _iceRouteStatsParser =
+      const WebRtcIceRouteStatsParser();
   RTCPeerConnection? _peerConnection;
   final Map<String, RTCDataChannel> _dataChannels = {};
   final List<WebRtcIceCandidate> _pendingRemoteIceCandidates = [];
+  Timer? _iceRoutePollTimer;
+  bool _iceRouteRefreshInFlight = false;
+  WebRtcIceRoute _iceRoute = const WebRtcIceRoute();
 
   final _connectionStateController =
       StreamController<WebRtcConnectionState>.broadcast();
   final _localIceController = StreamController<WebRtcIceCandidate>.broadcast();
+  final _iceRouteController = StreamController<WebRtcIceRoute>.broadcast();
   final _dataMessageController =
       StreamController<WebRtcDataMessage>.broadcast();
 
@@ -26,7 +43,9 @@ class WebRtcPeerService {
       _connectionStateController.stream;
   Stream<WebRtcIceCandidate> get localIceCandidates =>
       _localIceController.stream;
+  Stream<WebRtcIceRoute> get iceRoutes => _iceRouteController.stream;
   Stream<WebRtcDataMessage> get dataMessages => _dataMessageController.stream;
+  WebRtcIceRoute get iceRoute => _iceRoute;
 
   Future<void> initialize({
     required List<String> dataChannelLabels,
@@ -41,12 +60,16 @@ class WebRtcPeerService {
       'iceServers': _buildIceServers(iceServers),
     };
 
-    final pc = await createPeerConnection(config);
+    final pc = await _peerConnectionFactory(config);
     _peerConnection = pc;
 
     pc.onConnectionState = (state) {
       debugLog('PeerConnection state changed to $state.');
       _connectionStateController.add(_mapConnectionState(state));
+      if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected ||
+          state == RTCPeerConnectionState.RTCPeerConnectionStateConnecting) {
+        unawaited(refreshIceRoute());
+      }
     };
 
     pc.onIceConnectionState = (state) {
@@ -59,6 +82,7 @@ class WebRtcPeerService {
         warningLog('ICE connection entered disconnected state.');
         _connectionStateController.add(WebRtcConnectionState.disconnected);
       }
+      unawaited(refreshIceRoute());
     };
 
     pc.onIceCandidate = (candidate) {
@@ -84,6 +108,9 @@ class WebRtcPeerService {
     for (final label in dataChannelLabels) {
       await addDataChannel(label);
     }
+
+    _startIceRoutePolling();
+    _emitIceRoute(const WebRtcIceRoute());
   }
 
   Future<WebRtcSessionDescription> createOffer({
@@ -215,12 +242,39 @@ class WebRtcPeerService {
     await channel.send(RTCDataChannelMessage(message));
   }
 
+  Future<WebRtcIceRoute> refreshIceRoute() async {
+    final pc = _peerConnection;
+    if (pc == null) {
+      _emitIceRoute(const WebRtcIceRoute());
+      return _iceRoute;
+    }
+    if (_iceRouteRefreshInFlight) {
+      return _iceRoute;
+    }
+
+    _iceRouteRefreshInFlight = true;
+    try {
+      final reports = await pc.getStats();
+      final next = _iceRouteStatsParser.parse(reports);
+      _emitIceRoute(next);
+      return next;
+    } catch (error, stackTrace) {
+      debugLog('Unable to refresh ICE route from stats: $error');
+      errorLog('ICE route stats refresh failed.', error, stackTrace);
+      return _iceRoute;
+    } finally {
+      _iceRouteRefreshInFlight = false;
+    }
+  }
+
   Future<WebRtcSessionDescription> restartIceAndCreateOffer() {
     return createOffer(iceRestart: true);
   }
 
   Future<void> close() async {
     infoLog('Closing WebRTC peer service. channels=${_dataChannels.length}.');
+    _iceRoutePollTimer?.cancel();
+    _iceRoutePollTimer = null;
     for (final channel in _dataChannels.values) {
       await channel.close();
     }
@@ -234,6 +288,7 @@ class WebRtcPeerService {
       await pc.dispose();
     }
 
+    _emitIceRoute(const WebRtcIceRoute());
     _connectionStateController.add(WebRtcConnectionState.closed);
     debugLog('WebRTC peer service closed.');
   }
@@ -242,6 +297,7 @@ class WebRtcPeerService {
     await close();
     await _connectionStateController.close();
     await _localIceController.close();
+    await _iceRouteController.close();
     await _dataMessageController.close();
   }
 
@@ -370,5 +426,22 @@ class WebRtcPeerService {
         WebRtcDataMessage(channelLabel: label, message: value),
       );
     });
+  }
+
+  void _startIceRoutePolling() {
+    _iceRoutePollTimer?.cancel();
+    _iceRoutePollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      unawaited(refreshIceRoute());
+    });
+  }
+
+  void _emitIceRoute(WebRtcIceRoute next) {
+    if (_iceRoute == next) {
+      return;
+    }
+    _iceRoute = next;
+    if (!_iceRouteController.isClosed) {
+      _iceRouteController.add(next);
+    }
   }
 }
