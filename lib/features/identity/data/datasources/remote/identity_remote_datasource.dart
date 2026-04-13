@@ -20,8 +20,6 @@ abstract class IdentityRemoteDataSource {
 
   Future<List<DeviceModel>> listMyDevices();
 
-  Future<List<DeviceModel>> listUserDevices({required String userId});
-
   Future<DeviceServiceModel> registerService({
     required String deviceId,
     required String serviceName,

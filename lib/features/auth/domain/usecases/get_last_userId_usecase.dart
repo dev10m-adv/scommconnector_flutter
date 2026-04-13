@@ -6,6 +6,6 @@ class GetLastUsedUserIdUseCase {
   GetLastUsedUserIdUseCase(this.repository);
 
   Future<String?> call() {
-    return repository.getLastUsedUserId();
+    return repository.getLastUserEmail();
   }
 }

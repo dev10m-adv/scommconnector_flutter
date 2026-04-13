@@ -1,12 +1,14 @@
+import 'package:scommconnector/features/webrtc/application/webrtc_manager.dart';
+
 import '../entities/webrtc_session_description.dart';
-import '../repositories/webrtc_repository.dart';
 
 class CreateWebRtcAnswerUseCase {
-  final WebRtcRepository repository;
+  final WebRtcSessionManager manager;
 
-  const CreateWebRtcAnswerUseCase(this.repository);
+  const CreateWebRtcAnswerUseCase(this.manager);
 
-  Future<WebRtcSessionDescription> call(WebRtcSessionDescription offer) {
+  Future<WebRtcSessionDescription> call({required String sessionId, required WebRtcSessionDescription offer}) {
+    final repository = manager.getOrCreate(sessionId);
     return repository.createAnswerForOffer(offer);
   }
 }

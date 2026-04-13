@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:fixnum/fixnum.dart' as fixnum;
 import 'package:grpc/grpc.dart';
+
 import '../../../../core/errors/errors.dart';
 import '../../../../core/logging/log.dart';
 import '../../domain/entities/signaling_entities.dart';
@@ -10,156 +11,284 @@ import 'generated/signaling/signaling.pbgrpc.dart' as signaling_grpc;
 import 'signaling_service_grpc_client.dart';
 
 class SignalingServiceGrpcClientImpl implements SignalingServiceGrpcClient {
-  final signaling_grpc.SignalingServiceClient _client;
+  final ClientChannel _channel;
+  late final signaling_grpc.SignalingServiceClient _client;
   final SignalingAccessTokenProvider _accessTokenProvider;
 
-  StreamController<signaling_pb.SignalEnvelope>? _outgoingController;
+  final StreamController<SignalingEnvelope> _messagesController =
+      StreamController<SignalingEnvelope>.broadcast();
+
+  final StreamController<SignalingConnectionStatus> _statusController =
+      StreamController<SignalingConnectionStatus>.broadcast();
+
   StreamSubscription<signaling_pb.SignalEnvelope>? _incomingSubscription;
-  StreamController<SignalingEnvelope>? _incomingController;
+  StreamController<signaling_pb.SignalEnvelope>? _outgoingController;
 
-  SignalingServiceGrpcClientImpl({
-    required String host,
-    required int port,
-    bool useTls = false,
-    required SignalingAccessTokenProvider accessTokenProvider,
-  }) : _client = signaling_grpc.SignalingServiceClient(
-         ClientChannel(
-           host,
-           port: port,
-           options: ChannelOptions(
-             credentials: useTls
-                 ? const ChannelCredentials.secure()
-                 : const ChannelCredentials.insecure(),
-           ),
-         ),
-       ),
-       _accessTokenProvider = accessTokenProvider;
+  String? _currentDeviceId;
 
-  @override
-  Stream<SignalingEnvelope> connect({required String deviceId}) {
-    infoLog('Opening signaling gRPC stream for deviceId=$deviceId.');
-    final incomingController = StreamController<SignalingEnvelope>.broadcast();
-    _incomingController = incomingController;
+  bool _isDisposed = false;
+  bool _isStopping = false;
+  bool _isConnected = false;
+  bool _isReconnecting = false;
 
-    unawaited(_openConnection(deviceId: deviceId, sink: incomingController));
+  Future<void>? _connectFuture;
 
-    return incomingController.stream;
+  SignalingServiceGrpcClientImpl(this._channel, this._accessTokenProvider) {
+    _client = signaling_grpc.SignalingServiceClient(_channel);
   }
 
-  Future<void> _openConnection({
-    required String deviceId,
-    required StreamController<SignalingEnvelope> sink,
-  }) async {
+  @override
+  Stream<SignalingEnvelope> get messages => _messagesController.stream;
+
+  @override
+  Stream<SignalingConnectionStatus> get connectionStatus =>
+      _statusController.stream;
+
+  @override
+  Future<void> connect({required String deviceId}) async {
+    if (_isDisposed) {
+      throw StateError('Signaling client already disposed.');
+    }
+
+    _currentDeviceId = deviceId;
+    _isStopping = false;
+
+    if (_isConnected) {
+      debugLog('Signaling connect skipped: already connected.');
+      return;
+    }
+
+    if (_connectFuture != null) {
+      debugLog('Signaling connect skipped: connection already in progress.');
+      return _connectFuture!;
+    }
+
+    infoLog('Opening signaling gRPC stream for deviceId=$deviceId.');
+    _emitStatus(SignalingConnectionStatus.connecting);
+
+    _connectFuture = _openConnection();
     try {
-      debugLog('Creating authorized signaling call options.');
+      await _connectFuture;
+    } finally {
+      _connectFuture = null;
+    }
+  }
+
+  Future<void> _openConnection() async {
+    final deviceId = _currentDeviceId;
+
+    if (deviceId == null || _isDisposed || _isStopping) return;
+
+    try {
       final options = await _authorizedOptions();
-      await _outgoingController?.close();
-      _outgoingController = StreamController<signaling_pb.SignalEnvelope>();
+
+      await _incomingSubscription?.cancel();
+      _incomingSubscription = null;
+
+      final previousOutgoing = _outgoingController;
+      _outgoingController = null;
+      unawaited(previousOutgoing?.close());
+
+      final outgoingController =
+          StreamController<signaling_pb.SignalEnvelope>();
+      _outgoingController = outgoingController;
 
       final responseStream = _client.connect(
-        _outgoingController!.stream,
+        outgoingController.stream,
         options: options,
       );
 
-      // First message must be hello with current deviceId.
-      _outgoingController!.add(
+      _incomingSubscription = responseStream.listen(
+        (event) {
+          print('Received signaling message: ${event.messageId}');
+          if (_isDisposed || _isStopping) return;
+
+          if (!_isConnected) {
+            _isConnected = true;
+            _isReconnecting = false;
+            _emitStatus(SignalingConnectionStatus.connected);
+          }
+
+          final envelope = _fromProtoEnvelope(event);
+
+          _messagesController.add(envelope);
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          if (_isDisposed || _isStopping) return;
+
+          _isConnected = false;
+          warningLog('Signaling gRPC stream error.', error, stackTrace);
+
+          if (!_messagesController.isClosed) {
+            _messagesController.addError(_toAppError(error), stackTrace);
+          }
+
+          _scheduleReconnect();
+        },
+        onDone: () {
+          if (_isDisposed || _isStopping) return;
+
+          _isConnected = false;
+          _scheduleReconnect();
+        },
+        cancelOnError: true,
+      );
+
+      outgoingController.add(
         signaling_pb.SignalEnvelope(
           messageId: _buildMessageId(),
           hello: signaling_pb.HelloPayload(deviceId: deviceId),
         ),
       );
-      debugLog('Sent signaling HELLO handshake for deviceId=$deviceId.');
-
-      await _incomingSubscription?.cancel();
-      _incomingSubscription = responseStream.listen(
-        (event) {
-          final envelope = _fromProtoEnvelope(event);
-          debugLog(
-            'Received signaling envelope from gRPC type=${envelope.payloadType} messageId=${envelope.messageId}.',
-          );
-          sink.add(envelope);
-        },
-        onError: (Object error, StackTrace stackTrace) {
-          warningLog('Signaling gRPC stream error.', error, stackTrace);
-          sink.addError(_toAppError(error), stackTrace);
-        },
-        onDone: () {
-          warningLog('Signaling gRPC stream completed.');
-          sink.close();
-        },
-      );
     } catch (error, stackTrace) {
+      if (_isDisposed || _isStopping) return;
+      _isConnected = false;
       errorLog('Failed to open signaling gRPC stream.', error, stackTrace);
-      sink.addError(_toAppError(error), stackTrace);
-      await sink.close();
+      if (!_messagesController.isClosed) {
+        _messagesController.addError(_toAppError(error), stackTrace);
+      }
+
+      _scheduleReconnect();
     }
+  }
+
+  void _scheduleReconnect() {
+    if (_isDisposed || _isStopping || _isReconnecting) return;
+
+    _isReconnecting = true;
+    _emitStatus(SignalingConnectionStatus.reconnecting);
+
+    () async {
+      const delays = <Duration>[
+        Duration(seconds: 1),
+        Duration(seconds: 2),
+        Duration(seconds: 4),
+        Duration(seconds: 8),
+        Duration(seconds: 15),
+      ];
+
+      for (final delay in delays) {
+        print(
+          'Waiting ${delay.inSeconds} seconds before next signaling reconnect attempt.',
+        );
+        if (_isDisposed || _isStopping) {
+          _isReconnecting = false;
+          return;
+        }
+
+        await Future.delayed(delay);
+
+        if (_isDisposed || _isStopping) {
+          _isReconnecting = false;
+          return;
+        }
+
+        try {
+          print('Attempting signaling reconnect...');
+          await _openConnection();
+
+          if (_isConnected) {
+            _isReconnecting = false;
+            infoLog('Signaling reconnect succeeded.');
+            return;
+          }
+        } catch (_) {
+          // _openConnection already logs and emits errors.
+        }
+      }
+
+      _isReconnecting = false;
+
+      if (!_isDisposed && !_isStopping) {
+        _scheduleReconnect();
+      }
+    }();
   }
 
   @override
   Future<void> sendEnvelope(SignalingEnvelope envelope) async {
-    try {
-      if (_outgoingController == null) {
-        throw const ServerException(
-          message: 'Signaling stream is not connected.',
-        );
-      }
-
-      debugLog(
-        'Queueing outbound signaling envelope type=${envelope.payloadType} messageId=${envelope.messageId}.',
-      );
-      _outgoingController!.add(_toProtoEnvelope(envelope));
-    } catch (error) {
-      errorLog('Failed to queue outbound signaling envelope.', error);
-      throw _toAppError(error);
+    if (_isDisposed) {
+      throw StateError('Cannot send envelope after dispose.');
     }
+
+    if (_isStopping) {
+      throw StateError('Cannot send envelope while signaling is stopped.');
+    }
+
+    final outgoing = _outgoingController;
+    if (!_isConnected || outgoing == null || outgoing.isClosed) {
+      throw const NoConnectionException();
+    }
+
+    outgoing.add(_toProtoEnvelope(envelope));
   }
 
   @override
   Stream<SignalingPresenceEvent> watchPresence({
     required List<String> targetUris,
   }) async* {
-    try {
-      infoLog('Watching presence for ${targetUris.length} target URIs.');
-      final options = await _authorizedOptions();
-      final response = _client.watchPresence(
-        signaling_pb.WatchPresenceRequest(
-          targets: targetUris
-              .map((uri) => signaling_pb.DeviceRef(uri: uri))
-              .toList(growable: false),
-        ),
-        options: options,
-      );
+    if (targetUris.isEmpty) return;
 
-      await for (final event in response) {
-        final mapped = _fromProtoPresence(event);
-        debugLog(
-          'Presence update uri=${mapped.deviceUri} status=${mapped.status}.',
-        );
-        yield mapped;
-      }
-    } on GrpcError catch (error) {
-      warningLog('Presence watch gRPC error: code=${error.code}.', error);
-      throw _mapGrpcError(error);
-    } catch (error) {
-      if (error is AppException) rethrow;
-      errorLog('Presence watch failed with unexpected error.', error);
-      throw const UnknownAppException(
-        message: 'Signaling presence watch failed.',
-      );
+    final options = await _authorizedOptions();
+
+    final responseStream = _client.watchPresence(
+      signaling_pb.WatchPresenceRequest(
+        targets: targetUris
+            .map((uri) => signaling_pb.DeviceRef(uri: uri))
+            .toList(growable: false),
+      ),
+      options: options,
+    );
+
+    await for (final event in responseStream) {
+      yield _fromProtoPresence(event);
     }
   }
 
   @override
   Future<void> disconnect() async {
     infoLog('Disconnecting signaling gRPC stream.');
+
+    _isStopping = true;
+    _isConnected = false;
+    _isReconnecting = false;
+    _connectFuture = null;
+
     await _incomingSubscription?.cancel();
     _incomingSubscription = null;
 
-    await _outgoingController?.close();
+    final outgoing = _outgoingController;
     _outgoingController = null;
+    await outgoing?.close();
 
-    await _incomingController?.close();
-    _incomingController = null;
+    _emitStatus(SignalingConnectionStatus.stopped);
+  }
+
+  @override
+  Future<void> dispose() async {
+    infoLog('Disposing signaling gRPC client.');
+
+    _isDisposed = true;
+    _isStopping = true;
+    _isConnected = false;
+    _isReconnecting = false;
+    _connectFuture = null;
+
+    await _incomingSubscription?.cancel();
+    _incomingSubscription = null;
+
+    final outgoing = _outgoingController;
+    _outgoingController = null;
+    await outgoing?.close();
+
+    await _messagesController.close();
+    await _statusController.close();
+  }
+
+  void _emitStatus(SignalingConnectionStatus status) {
+    if (!_statusController.isClosed) {
+      _statusController.add(status);
+    }
   }
 
   signaling_pb.SignalEnvelope _toProtoEnvelope(SignalingEnvelope envelope) {

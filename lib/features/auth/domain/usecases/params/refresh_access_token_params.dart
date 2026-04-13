@@ -1,9 +1,9 @@
 class RefreshAccessTokenParams {
   final String refreshToken;
-  final String userId;
+  final String email;
 
   const RefreshAccessTokenParams({
     required this.refreshToken,
-    required this.userId,
+    required this.email,
   });
 }

@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'package:scommconnector/features/signaling/domain/usecases/send_signal_envelope_usecase.dart';
+import 'package:scommconnector/features/signaling/domain/usecases/watch_signaling_messages_uscase.dart';
+
 import '../../../../core/errors/errors.dart';
 import '../../../../core/logging/log.dart';
 import '../../../../core/resilience/online_aware_resilience.dart';
@@ -9,23 +12,15 @@ import '../../domain/services/request_matcher.dart';
 import '../../domain/services/signaling_error_classifier.dart';
 import '../../domain/usecases/connect_signaling_usecase.dart';
 import '../../domain/usecases/disconnect_signaling_usecase.dart';
-import '../../domain/usecases/send_signal_envelope_usecase.dart';
+import '../../domain/usecases/watch_connection_status_usecase.dart';
 import '../../domain/usecases/watch_presence_usecase.dart';
 import '../state/signaling_state.dart';
 
-/// Orchestrates signaling lifecycle, connection management, and message routing.
-///
-/// Follows Clean Architecture:
-/// - Delegates transport concerns to SignalingRepository
-/// - Delegates heartbeat to IConnectionHealthMonitor
-/// - Delegates error classification to ISignalingErrorClassifier
-/// - Delegates internet monitoring to IOnlineAwareResilience
-/// - Delegates request matching to IRequestMatcher
-///
-/// Single Responsibility: Orchestrate signaling operations and manage state.
 class SignalingController {
   final ConnectSignalingUseCase connectSignalingUseCase;
   final DisconnectSignalingUseCase disconnectSignalingUseCase;
+  final WatchSignalingMessagesUseCase watchSignalingMessagesUseCase;
+  final WatchConnectionStatusUseCase watchConnectionStatusUseCase;
   final SendSignalEnvelopeUseCase sendSignalEnvelopeUseCase;
   final WatchPresenceUseCase watchPresenceUseCase;
   final IConnectionHealthMonitor healthMonitor;
@@ -33,23 +28,11 @@ class SignalingController {
   final IOnlineAwareResilience onlineAwareness;
   final IRequestMatcher requestMatcher;
 
-  SignalingState _state = const SignalingState();
-  StreamSubscription<SignalEnvelope>? _inboundSubscription;
-  StreamSubscription<SignalingPresenceEvent>? _presenceSubscription;
-
-  String? _deviceId;
-  bool _stoppedManually = false;
-  bool _autoReconnectEnabled = true;
-  bool _reconnectInProgress = false;
-
-  final _incomingController = StreamController<SignalEnvelope>.broadcast();
-  final _presenceController =
-      StreamController<SignalingPresenceEvent>.broadcast();
-  final _stateController = StreamController<SignalingState>.broadcast();
-
   SignalingController({
     required this.connectSignalingUseCase,
     required this.disconnectSignalingUseCase,
+    required this.watchSignalingMessagesUseCase,
+    required this.watchConnectionStatusUseCase,
     required this.sendSignalEnvelopeUseCase,
     required this.watchPresenceUseCase,
     required this.healthMonitor,
@@ -58,40 +41,120 @@ class SignalingController {
     required this.requestMatcher,
   });
 
-  SignalingState get state => _state;
+  SignalingState _state = const SignalingState();
+  String? _deviceId;
+  bool _manualStop = false;
+  List<String> _watchedPresenceTargets = const [];
+
+  // Stream subscriptions
+  StreamSubscription<SignalingEnvelope>? _messagesSub;
+
+  // Signaling server connection status stream
+  StreamSubscription<SignalingConnectionStatus>? _statusSub;
+
+  // Presence updates stream [NOTE: Proper used YET]
+  StreamSubscription<SignalingPresenceEvent>? _presenceSub;
+
+  // controllers Streams to emit state, incoming messages and presence events
+  final StreamController<SignalingState> _stateController =
+      StreamController<SignalingState>.broadcast();
+
+  final StreamController<SignalingEnvelope> _incomingController =
+      StreamController<SignalingEnvelope>.broadcast();
+
+  final StreamController<SignalingPresenceEvent> _presenceController =
+      StreamController<SignalingPresenceEvent>.broadcast();
+
+  // Public streams to listen to state changes, incoming messages and presence events
   Stream<SignalingState> get signalingStates => _stateController.stream;
-  Stream<SignalEnvelope> get incomingMessages => _incomingController.stream;
+  Stream<SignalingEnvelope> get incomingMessages => _incomingController.stream;
   Stream<SignalingPresenceEvent> get presenceEvents =>
       _presenceController.stream;
+  SignalingState get state => _state;
 
+
+  // Starts the signaling controller by connecting to the signaling server and setting up necessary streams.
   Future<void> start({required String deviceId}) async {
-    infoLog('Signaling start requested for deviceId=$deviceId.');
     _deviceId = deviceId;
-    _stoppedManually = false;
-    _autoReconnectEnabled = true;
+    _manualStop = false;
 
-    await _connectWithRetries(isReconnect: false);
-    await _startOnlineAwareness();
+    await _bindStreams();
+
+    await connectSignalingUseCase(deviceId: deviceId);
+
+    await onlineAwareness.startMonitoring(
+      shouldAutoRecover: () => !_manualStop,
+      onRecoveryNeeded: () async {
+        final id = _deviceId;
+        if (id == null || id.isEmpty) return;
+        try {
+          await connectSignalingUseCase(deviceId: id);
+        } catch (_) {}
+      },
+    );
   }
 
+
+  // Stops the signaling controller by disconnecting from the signaling server, stopping all streams, and clearing any pending requests.
   Future<void> stop() async {
-    infoLog('Signaling stop requested.');
-    _stoppedManually = true;
-    _autoReconnectEnabled = false;
+    print('Stopping signaling controller...');
+    _manualStop = true;
+    _watchedPresenceTargets = const [];
+
     await onlineAwareness.stopMonitoring();
+    await _presenceSub?.cancel();
+    _presenceSub = null;
+
     await healthMonitor.stopHeartbeat();
-    await _disposeStreamBindings();
     await disconnectSignalingUseCase();
+
     requestMatcher.clearAllRequests();
 
-    _emitState(_state.copyWith(
-      status: SignalingStatus.disconnected,
-      message: 'Disconnected.',
-      clearError: true,
-    ));
-    infoLog('Signaling disconnected and cleaned up.');
+    _emitState(
+      _state.copyWith(
+        status: SignalingStatus.disconnected,
+        message: 'Disconnected.',
+        clearError: true,
+      ),
+    );
   }
 
+  // Disposes the signaling controller by stopping it and closing all stream controllers.
+  Future<void> dispose() async {
+    _manualStop = true;
+
+    await onlineAwareness.stopMonitoring();
+    await _presenceSub?.cancel();
+    await _messagesSub?.cancel();
+    await _statusSub?.cancel();
+    await healthMonitor.stopHeartbeat();
+    await disconnectSignalingUseCase();
+
+    requestMatcher.clearAllRequests();
+
+    await _stateController.close();
+    await _incomingController.close();
+    await _presenceController.close();
+  }
+
+  // Sends a signaling envelope to the signaling server. If an error occurs, it updates the state with the error message and rethrows the error.
+  Future<void> sendEnvelope(SignalingEnvelope envelope) async {
+    try {
+      await sendSignalEnvelopeUseCase(envelope);
+    } catch (error) {
+      final appError = errorClassifier.toAppError(error);
+      _emitState(
+        _state.copyWith(
+          status: SignalingStatus.failure,
+          error: appError.message,
+          clearMessage: true,
+        ),
+      );
+      rethrow;
+    }
+  }
+
+  // Send a connection request to another devices and waits for while;
   Future<void> sendConnectionRequest({
     required String requestId,
     required String fromUri,
@@ -103,7 +166,7 @@ class SignalingController {
     final completer = requestMatcher.registerRequest(requestId);
 
     await sendEnvelope(
-      SignalEnvelope(
+      SignalingEnvelope(
         messageId: _buildMessageId(),
         from: SignalingDeviceRef(uri: fromUri),
         to: SignalingDeviceRef(uri: toUri),
@@ -123,157 +186,172 @@ class SignalingController {
         message: 'Connection timed out. Target may be offline or unreachable.',
       );
     } finally {
-      requestMatcher.failRequest(requestId, 'Request cancelled.');
+      requestMatcher.failRequest(requestId, 'Request finished.');
     }
   }
 
-  Future<void> sendEnvelope(SignalEnvelope envelope) async {
-    try {
-      debugLog(
-        'Sending signaling envelope type=${envelope.payloadType} messageId=${envelope.messageId}.',
-      );
-      await sendSignalEnvelopeUseCase(envelope);
-    } catch (error) {
-      final appError = errorClassifier.toAppError(error);
-      _emitState(_state.copyWith(
-        status: SignalingStatus.failure,
-        error: appError.message,
-      ));
-      errorLog('Failed to send signaling envelope.', error);
-      rethrow;
-    }
-  }
-
+  // Watches the presence of devices eg online/offline status
   Future<void> watchPresence({required List<String> targetUris}) async {
-    try {
-      infoLog('Starting presence watch for ${targetUris.length} targets.');
-      await _presenceSubscription?.cancel();
-      _presenceSubscription = watchPresenceUseCase(targetUris: targetUris)
-          .listen(
-            _presenceController.add,
-            onError: (Object error, StackTrace stackTrace) {
-              warningLog('Presence stream emitted error.', error, stackTrace);
-              _presenceController.addError(
-                errorClassifier.toAppError(error),
-                stackTrace,
-              );
-            },
-          );
-    } catch (error) {
-      _emitState(_state.copyWith(
-        status: SignalingStatus.failure,
-        error: errorClassifier.toAppError(error).message,
-      ));
-      errorLog('Failed to start presence watch.', error);
-      rethrow;
-    }
-  }
+    final targets = targetUris
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
 
-  Future<void> dispose() async {
-    await stop();
-    await _stateController.close();
-    await _incomingController.close();
-    await _presenceController.close();
-  }
+    _watchedPresenceTargets = targets;
 
-  Future<void> _connectWithRetries({required bool isReconnect}) async {
-    final deviceId = _deviceId;
-    if (deviceId == null || deviceId.isEmpty) {
-      throw const ServerException(message: 'Missing device id for signaling.');
+    await _presenceSub?.cancel();
+    _presenceSub = null;
+
+    if (targets.isEmpty || _state.status != SignalingStatus.connected) {
+      return;
     }
 
-    for (var attempt = 0; attempt <= 3; attempt++) {
-      if (_stoppedManually) {
-        return;
-      }
-
-      final isFinalAttempt = attempt == 3;
-      final shouldShowReconnect = isReconnect && attempt > 0;
-
-      _emitState(_state.copyWith(
-        status: shouldShowReconnect
-            ? SignalingStatus.reconnecting
-            : SignalingStatus.connecting,
-        message: shouldShowReconnect
-            ? 'Reconnecting (attempt ${attempt + 1})...'
-            : null,
-        clearError: true,
-      ));
-
-      try {
-        await _disposeStreamBindings();
-        infoLog(
-          'Opening signaling stream. isReconnect=$isReconnect attempt=${attempt + 1}.',
-        );
-        final stream = connectSignalingUseCase(deviceId: deviceId);
-        _bindIncoming(stream);
-        healthMonitor.startHeartbeat(
-          interval: const Duration(minutes: 15),
-          onSendHeartbeat: (envelope) => sendEnvelope(envelope),
-        );
-
-        _emitState(_state.copyWith(
-          status: SignalingStatus.connected,
-          message: 'Connected.',
-          clearError: true,
-        ));
-        infoLog('Signaling connected successfully.');
-        return;
-      } catch (error) {
-        final appError = errorClassifier.toAppError(error);
-        warningLog(
-          'Signaling connection attempt failed on attempt ${attempt + 1}.',
-          appError,
-        );
-        if (!errorClassifier.shouldAutoReconnect(appError)) {
-          _autoReconnectEnabled = false;
-          _emitState(_state.copyWith(
-            status: SignalingStatus.failure,
-            error: appError.message,
-          ));
-          throw appError;
+    _presenceSub = watchPresenceUseCase(targetUris: targets).listen(
+      (event) {
+        if (!_presenceController.isClosed) {
+          _presenceController.add(event);
         }
-
-        if (isFinalAttempt) {
-          _emitState(_state.copyWith(
-            status: SignalingStatus.failure,
-            error: appError.message,
-          ));
-          throw appError;
-        }
-
-        const retrySchedule = <Duration>[
-          Duration(seconds: 1),
-          Duration(seconds: 2),
-          Duration(seconds: 4),
-        ];
-        if (attempt < retrySchedule.length) {
-          await Future<void>.delayed(retrySchedule[attempt]);
-        }
-      }
-    }
-  }
-
-  void _bindIncoming(Stream<SignalEnvelope> stream) {
-    debugLog('Binding incoming signaling stream.');
-    _inboundSubscription = stream.listen(
-      (envelope) {
-        debugLog(
-          'Incoming signaling envelope type=${envelope.payloadType} messageId=${envelope.messageId}.',
-        );
-        _incomingController.add(envelope);
-        _handleEnvelope(envelope);
       },
-      onError: (Object error, StackTrace stackTrace) {
-        warningLog('Signaling stream emitted error.', error, stackTrace);
-        _incomingController.addError(error, stackTrace);
-        _handleDisconnect(errorClassifier.toAppError(error));
+      onError: (error, stackTrace) {
+        if (!_presenceController.isClosed) {
+          _presenceController.addError(
+            errorClassifier.toAppError(error),
+            stackTrace,
+          );
+        }
       },
       onDone: () {
-        warningLog('Signaling stream completed unexpectedly.');
-        _handleDisconnect(
-          const UnknownAppException(
-            message: 'Signaling stream ended unexpectedly.',
+        warningLog('Presence stream ended.');
+      },
+      cancelOnError: false,
+    );
+  }
+
+  // Binds the necessary streams to listen for incoming signaling messages and connection status changes, and handles them accordingly.
+  Future<void> _bindStreams() async {
+    _messagesSub ??= watchSignalingMessagesUseCase().listen(
+      (envelope) {
+        if (!_incomingController.isClosed) {
+          _incomingController.add(envelope);
+        }
+        _handleEnvelope(envelope);
+      },
+      onError: (error, stackTrace) {
+        final appError = errorClassifier.toAppError(error);
+        if (!_incomingController.isClosed) {
+          _incomingController.addError(appError, stackTrace);
+        }
+
+        if (!_manualStop) {
+          _emitState(
+            _state.copyWith(
+              status: SignalingStatus.failure,
+              error: appError.message,
+              clearMessage: true,
+            ),
+          );
+        }
+      },
+      cancelOnError: false,
+    );
+
+    _statusSub ??= watchConnectionStatusUseCase().listen(
+      (status) async {
+        print('Connection status changed: $status');
+        switch (status) {
+          case SignalingConnectionStatus.disconnected:
+            await healthMonitor.stopHeartbeat();
+            _emitState(
+              _state.copyWith(
+                status: SignalingStatus.disconnected,
+                message: 'Disconnected.',
+                clearError: true,
+              ),
+            );
+            break;
+
+          case SignalingConnectionStatus.connecting:
+            _emitState(
+              _state.copyWith(
+                status: SignalingStatus.connecting,
+                message: 'Connecting...',
+                clearError: true,
+              ),
+            );
+            break;
+
+          case SignalingConnectionStatus.connected:
+            // Start heartbeat to monitor connection health[Ping-Pong mechanism]
+            // 15 minutes interval for ping to server
+            healthMonitor.startHeartbeat(
+              interval: const Duration(minutes: 15),
+              onSendHeartbeat: sendEnvelope,
+            );
+
+            await _restorePresenceWatch();
+
+            _emitState(
+              _state.copyWith(
+                status: SignalingStatus.connected,
+                message: 'Connected.',
+                clearError: true,
+              ),
+            );
+            break;
+
+          case SignalingConnectionStatus.reconnecting:
+            await healthMonitor.stopHeartbeat();
+            _emitState(
+              _state.copyWith(
+                status: SignalingStatus.reconnecting,
+                message: 'Reconnecting...',
+                clearError: true,
+              ),
+            );
+            break;
+
+          case SignalingConnectionStatus.stopped:
+            await healthMonitor.stopHeartbeat();
+            _emitState(
+              _state.copyWith(
+                status: SignalingStatus.disconnected,
+                message: 'Disconnected.',
+                clearError: true,
+              ),
+            );
+            break;
+
+          case SignalingConnectionStatus.authRequired:
+            await healthMonitor.stopHeartbeat();
+            _emitState(
+              _state.copyWith(
+                status: SignalingStatus.failure,
+                error: 'Authentication required.',
+                clearMessage: true,
+              ),
+            );
+            break;
+
+          case SignalingConnectionStatus.failed:
+            await healthMonitor.stopHeartbeat();
+            _emitState(
+              _state.copyWith(
+                status: SignalingStatus.failure,
+                error: 'Signaling connection failed.',
+                clearMessage: true,
+              ),
+            );
+            break;
+        }
+      },
+      onError: (error, stackTrace) {
+        final appError = errorClassifier.toAppError(error);
+        _emitState(
+          _state.copyWith(
+            status: SignalingStatus.failure,
+            error: appError.message,
+            clearMessage: true,
           ),
         );
       },
@@ -281,72 +359,43 @@ class SignalingController {
     );
   }
 
-  void _handleEnvelope(SignalEnvelope envelope) {
-    switch (envelope.payloadType) {
-      case SignalingPayloadType.connectionResponse:
-        final response = envelope.connectionResponse!;
-        final matched = requestMatcher.completeRequest(
-          response.requestId,
-          response,
-        );
-        if (!matched) {
-          warningLog(
-            'Received response for unknown requestId=${response.requestId}. '
-            'status=${response.status}. Pending requests=${requestMatcher.getPendingRequestIds()}',
-          );
-        } else {
-          debugLog(
-            'Matched connection response for requestId=${response.requestId} status=${response.status}.',
-          );
-        }
-        break;
 
-      case SignalingPayloadType.ping:
-        // Respond to ping with pong
-        _respondToPing(envelope);
-        break;
-
-      case SignalingPayloadType.pong:
-        // Pong received; heartbeat system will handle timing
-        break;
-
-      case SignalingPayloadType.connectionRequest:
-      case SignalingPayloadType.offer:
-      case SignalingPayloadType.answer:
-      case SignalingPayloadType.iceCandidate:
-        // Pass through to incomingMessages stream for ConnectController to handle
-        break;
-
-      case SignalingPayloadType.hello:
-      case SignalingPayloadType.unknown:
-        // Ignore hello/unknown payload types at controller level
-        break;
-    }
+  // Internal method to restore presence watch after reconnection.
+  Future<void> _restorePresenceWatch() async {
+    if (_watchedPresenceTargets.isEmpty || _manualStop) return;
+    await watchPresence(targetUris: _watchedPresenceTargets);
   }
-
-  Future<void> _respondToPing(SignalEnvelope pingEnvelope) async {
-    try {
-      debugLog(
-        'Responding to ping messageId=${pingEnvelope.messageId} from=${pingEnvelope.from?.uri}.',
-      );
-      final pongEnvelope = SignalEnvelope(
-        messageId: _buildMessageId(),
-        from: pingEnvelope.to,
-        to: pingEnvelope.from,
-        pongTimestampMs: DateTime.now().millisecondsSinceEpoch,
-      );
-      await sendEnvelope(pongEnvelope);
-    } catch (error) {
-      warningLog('Error responding to ping.', error);
-    }
-  }
-
-  void _ensureConnectionAccepted(SignalingConnectionResponse response) {
-    if (response.status == SignalingConnectionResponseStatus.accepted) {
+  
+  void _handleEnvelope(SignalingEnvelope envelope) {
+    if (envelope.connectionResponse != null) {
+      final response = envelope.connectionResponse!;
+      requestMatcher.completeRequest(response.requestId, response);
       return;
     }
 
+    if (envelope.pingTimestampMs != null) {
+      unawaited(_respondToPing(envelope));
+    }
+  }
+
+  Future<void> _respondToPing(SignalingEnvelope pingEnvelope) async {
+    try {
+      await sendEnvelope(
+        SignalingEnvelope(
+          messageId: _buildMessageId(),
+          from: pingEnvelope.to,
+          to: pingEnvelope.from,
+          pongTimestampMs: DateTime.now().millisecondsSinceEpoch,
+        ),
+      );
+    } catch (_) {}
+  }
+
+  void _ensureConnectionAccepted(SignalingConnectionResponse response) {
+    if (response.status == SignalingConnectionResponseStatus.accepted) return;
+
     final reason = response.reason.isNotEmpty ? response.reason : null;
+
     switch (response.status) {
       case SignalingConnectionResponseStatus.rejected:
         throw ServerException(
@@ -359,87 +408,18 @@ class SignalingController {
           message: reason ?? 'Connection blocked by target device.',
         );
       case SignalingConnectionResponseStatus.unspecified:
-      default:
         throw ServerException(message: reason ?? 'Connection request failed.');
+      case SignalingConnectionResponseStatus.accepted:
+        return;
     }
   }
 
-  Future<void> _startOnlineAwareness() async {
-    await onlineAwareness.startMonitoring(
-      onRecoveryNeeded: _handleInternetRecovery,
-      shouldAutoRecover: () => !_stoppedManually && _autoReconnectEnabled,
-    );
-  }
-
-  Future<void> _handleInternetRecovery() async {
-    if (_reconnectInProgress) {
-      debugLog('Skipping internet recovery; reconnect is already in progress.');
-      return;
-    }
-
-    _emitState(_state.copyWith(
-      status: SignalingStatus.reconnecting,
-      message: 'Internet recovered. Reconnecting...',
-    ));
-
-    _reconnectInProgress = true;
-    try {
-      infoLog('Internet recovered. Attempting signaling reconnect.');
-      await _connectWithRetries(isReconnect: true);
-    } finally {
-      _reconnectInProgress = false;
-    }
-  }
-
-  void _handleDisconnect(AppException error) {
-    if (_stoppedManually) {
-      debugLog('Ignoring disconnect because signaling was stopped manually.');
-      return;
-    }
-
-    warningLog('Handling signaling disconnect: ${error.message}', error);
-
-    if (!errorClassifier.shouldAutoReconnect(error)) {
-      _autoReconnectEnabled = false;
-      _emitState(_state.copyWith(
-        status: SignalingStatus.failure,
-        error: error.message,
-        clearMessage: true,
-      ));
-      return;
-    }
-
-    if (!_autoReconnectEnabled || _reconnectInProgress) {
-      return;
-    }
-
-    _emitState(_state.copyWith(
-      status: SignalingStatus.reconnecting,
-      message: 'Connection lost. Reconnecting...',
-      error: error.message,
-    ));
-
-    _reconnectInProgress = true;
-    _connectWithRetries(isReconnect: true).whenComplete(() {
-      _reconnectInProgress = false;
-    });
-  }
-
-  Future<void> _disposeStreamBindings() async {
-    await _inboundSubscription?.cancel();
-    _inboundSubscription = null;
-    debugLog('Disposed signaling stream bindings.');
-  }
-
-  String _buildMessageId() {
-    final timestamp = DateTime.now().microsecondsSinceEpoch;
-    return 'sig-$timestamp';
-  }
+  String _buildMessageId() => 'sig-${DateTime.now().microsecondsSinceEpoch}';
 
   void _emitState(SignalingState next) {
     _state = next;
     if (!_stateController.isClosed) {
-      _stateController.add(_state);
+      _stateController.add(next);
     }
   }
 }

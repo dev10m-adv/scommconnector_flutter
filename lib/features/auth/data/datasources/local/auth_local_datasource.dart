@@ -11,7 +11,7 @@ abstract class AuthLocalDataSource {
   
   Future<void> clearUserToken(String userId);
 
-  Future<String?> getLastUsedUserId();
-  Future<void> saveLastUsedUserId(String userId);
-  Future<void> removeLastUsedUserId();
+  Future<String?> getLastUsedUserEmail();
+  Future<void> saveLastUsedUserEmail(String email);
+  Future<void> removeLastUsedUserEmail();
 }

@@ -3,29 +3,29 @@ import 'package:scommconnector/features/webrtc/domain/entities/webrtc_ice_server
 class ScommStartConfig {
   final String deviceId;
   final String serverAddress;
-  final String userId;
   final int serverPort;
   final bool useTls;
+  final String email;
 
   final List<WebRtcIceServerConfig> iceServers;
 
    ScommStartConfig({
     required this.deviceId,
     required this.serverAddress,
-    required this.userId,
     required this.serverPort,
     required this.useTls,
     required this.iceServers,
+    required this.email,
   });
 
   Map<String, dynamic> toJson() {
     return {
       'deviceId': deviceId,
       'serverAddress': serverAddress,
-      'userId': userId,
       'serverPort': serverPort,
       'useTls': useTls,
       'iceServers': iceServers.map((e) => e.toJson()).toList(),
+      'email': email,
     };
   }
 
@@ -33,12 +33,12 @@ class ScommStartConfig {
     return ScommStartConfig(
       deviceId: json['deviceId'] as String,
       serverAddress: json['serverAddress'] as String,
-      userId: json['userId'] as String,
       serverPort: json['serverPort'] as int,
       useTls: json['useTls'] as bool,
       iceServers: (json['iceServers'] as List<dynamic>)
           .map((e) => WebRtcIceServerConfig.fromJson(e as Map<String, dynamic>))
           .toList(),
+      email: json['email'] as String,
     );
   }
 }
@@ -48,6 +48,12 @@ sealed class ScommLoginConfig {
   ScommLoginConfig({
     required this.provider,
   });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'provider': provider,
+    };
+  }
 }
 
 class ScommImapLoginConfig extends ScommLoginConfig {
@@ -65,6 +71,7 @@ class ScommImapLoginConfig extends ScommLoginConfig {
     required this.useTls,
   }) : super(provider: 'imap');
 
+  @override
   Map<String, dynamic> toJson() {
     return {
       'provider': provider,
@@ -90,19 +97,20 @@ class ScommImapLoginConfig extends ScommLoginConfig {
 class ScommTokenExchangeLoginConfig extends ScommLoginConfig {
   final String provider;
   final String externalAccessToken;
-  final String userId;
+  final String email;
 
   ScommTokenExchangeLoginConfig({
     required this.provider,
     required this.externalAccessToken,
-    required this.userId,
+    required this.email,
   }) : super(provider: provider);
 
+  @override
   Map<String, dynamic> toJson() {
     return {
       'provider': provider,
       'externalAccessToken': externalAccessToken,
-      'userId': userId,
+      'email': email,
     };
   }
 
@@ -110,7 +118,7 @@ class ScommTokenExchangeLoginConfig extends ScommLoginConfig {
     return ScommTokenExchangeLoginConfig(
       provider: json['provider'] as String,
       externalAccessToken: json['externalAccessToken'] as String,
-      userId: json['userId'] as String,
+      email: json['email'] as String,
     );
   }
 }

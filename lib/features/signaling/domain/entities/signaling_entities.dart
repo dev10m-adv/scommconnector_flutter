@@ -10,6 +10,16 @@ enum SignalingPayloadType {
   pong,
 }
 
+enum SignalingConnectionStatus {
+  disconnected,
+  connecting,
+  connected,
+  reconnecting,
+  stopped,
+  authRequired,
+  failed,
+}
+
 enum SignalingConnectionResponseStatus {
   unspecified,
   accepted,
@@ -111,8 +121,9 @@ class SignalingEnvelope {
     if (helloDeviceId != null && helloDeviceId!.isNotEmpty) {
       return SignalingPayloadType.hello;
     }
-    if (connectionRequest != null)
+    if (connectionRequest != null) {
       return SignalingPayloadType.connectionRequest;
+    }
     if (connectionResponse != null) {
       return SignalingPayloadType.connectionResponse;
     }

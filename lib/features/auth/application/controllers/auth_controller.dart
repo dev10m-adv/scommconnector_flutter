@@ -52,7 +52,7 @@ class ScommAuthController {
   Future<void> exchangeProviderToken({
     required String provider,
     required String externalAccessToken,
-    required String userId,
+    required String email,
   }) async {
     _setLoading();
 
@@ -62,10 +62,10 @@ class ScommAuthController {
         ExchangeExternalTokenParams(
           provider: provider,
           externalAccessToken: externalAccessToken,
-          userId: userId,
+          email: email,
         ),
       );
-      _setAuthenticated(tokens, userId);
+      _setAuthenticated(tokens, email);
       scommDi<AuthSessionState>().setAccessToken(tokens.accessToken);
     } catch (error) {
       _setFailure(error);
@@ -93,7 +93,7 @@ class ScommAuthController {
       ));
       return;
     }
-    final token = await _getAccessToken(userId: userId);
+    final token = await _getAccessToken(email: userId);
     print('Retrieved stored access token: $token');
     if (token == null || token.isEmpty) {
       _notify(_state.copyWith(
@@ -107,15 +107,15 @@ class ScommAuthController {
       isLoading: false,
       isLoggedIn: true,
       error: null,
-      userId: userId
+      email: userId
     ));
     scommDi<AuthSessionState>().setAccessToken(token);
   }
 
-  Future<void> initialize(String userId) async {
+  Future<void> initialize(String email) async {
     try {
-      final token = await _getAccessToken(userId: userId);
-      print('Retrieved stored access token for $userId: $token');
+      final token = await _getAccessToken(email: email);
+      print('Retrieved stored access token for $email: $token');
       if (token == null || token.isEmpty) {
         _notify(_state.copyWith(
           isLoading: false,
@@ -128,6 +128,7 @@ class ScommAuthController {
         isLoading: false,
         isLoggedIn: true,
         error: null,
+        email: _state.email,
       ));
       scommDi<AuthSessionState>().setAccessToken(token);
     } on UnauthorizedException {
@@ -153,10 +154,10 @@ class ScommAuthController {
         ExchangeImapCredentialsParams(
           provider: 'imap',
           imapCredentials: credentials,
-          userId: credentials.userId,
+          email: credentials.username,
         ),
       );
-      _setAuthenticated(tokens, credentials.userId);
+      _setAuthenticated(tokens, credentials.username);
       scommDi<AuthSessionState>().setAccessToken(tokens.accessToken);
     } catch (error) {
       _setFailure(error);
@@ -166,15 +167,15 @@ class ScommAuthController {
 
   Future<void> refreshAccessToken({
     required String refreshToken,
-    required String userId,
+    required String email,
   }) async {
     _setLoading();
 
     try {
       final tokens = await _refreshAccessTokenUseCase(
-        RefreshAccessTokenParams(refreshToken: refreshToken, userId: userId),
+        RefreshAccessTokenParams(refreshToken: refreshToken, email: email),
       );
-      _setAuthenticated(tokens, userId);
+      _setAuthenticated(tokens, email);
       scommDi<AuthSessionState>().setAccessToken(tokens.accessToken);
     } catch (error) {
       _setFailure(error);
@@ -182,16 +183,16 @@ class ScommAuthController {
     }
   }
 
-  Future<String?> _getAccessToken({required String userId}) {
-    return _getAccessTokenUseCase(userId);
+  Future<String?> _getAccessToken({required String email}) {
+    return _getAccessTokenUseCase(email);
   }
 
   void _setLoading() {
     _notify(_state.copyWith(clearError: true, isLoading: true, error: null));
   }
 
-  void _setAuthenticated(AuthTokens tokens, String? userId) {
-    _notify(_state.copyWith(clearError: true, isLoading: false, isLoggedIn: true, error: null, userId: userId));
+  void _setAuthenticated(AuthTokens tokens, String? email) {
+    _notify(_state.copyWith(clearError: true, isLoading: false, isLoggedIn: true, error: null, email: email));
   }
 
   void _setFailure(Object error) {

@@ -2,28 +2,28 @@ class AuthState {
   final bool isLoggedIn;
   final bool isLoading;
   final String? error;
-  final String? userId;
+  final String? email;
 
   const AuthState({
     required this.isLoggedIn,
     required this.isLoading,
     this.error,
-    this.userId,
+    this.email,
   });
 
   const AuthState.initial()
       : isLoggedIn = false,
         isLoading = false,
         error = null,
-        userId = null;
+        email = null;
 
   const AuthState.loading()
       : isLoggedIn = false,
         isLoading = true,
         error = null,
-        userId = null;
+        email = null;
 
-  const AuthState.authenticated(String this.userId)
+  const AuthState.authenticated(String this.email)
       : isLoggedIn = true,
         isLoading = false,
         error = null;
@@ -32,20 +32,20 @@ class AuthState {
   const AuthState.unauthenticated({this.error})
       : isLoggedIn = false,
         isLoading = false,
-        userId = null;
+        email = null;
 
   AuthState copyWith({
     bool? isLoggedIn,
     bool? isLoading,
     String? error,
-    String? userId,
+    String? email,
 
     bool clearError = false,
   }) {
     return AuthState(
       isLoggedIn: isLoggedIn ?? this.isLoggedIn,
       isLoading: isLoading ?? this.isLoading,
-      userId: userId ?? this.userId,
+      email: email ?? this.email,
       error: clearError ? null : (error ?? this.error),
     );
   }
@@ -55,7 +55,7 @@ class AuthState {
       'isLoggedIn': isLoggedIn,
       'isLoading': isLoading,
       'error': error,
-      'userId': userId,
+      'email': email,
     };
   }
 
@@ -64,7 +64,7 @@ class AuthState {
       isLoggedIn: json['isLoggedIn'] as bool,
       isLoading: json['isLoading'] as bool,
       error: json['error'] as String?,
-      userId: json['userId'] as String?,
+      email: json['email'] as String?,
     );
   }
 }

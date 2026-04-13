@@ -1,12 +1,13 @@
+import 'package:scommconnector/features/webrtc/application/webrtc_manager.dart';
 import '../entities/webrtc_session_description.dart';
-import '../repositories/webrtc_repository.dart';
 
 class SetRemoteAnswerUseCase {
-  final WebRtcRepository repository;
+  final WebRtcSessionManager manager;
 
-  const SetRemoteAnswerUseCase(this.repository);
+  const SetRemoteAnswerUseCase(this.manager);
 
-  Future<void> call(WebRtcSessionDescription answer) {
+  Future<void> call({required String sessionId, required WebRtcSessionDescription answer}) {
+    final repository = manager.getOrCreate(sessionId);
     return repository.setRemoteAnswer(answer);
   }
 }

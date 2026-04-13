@@ -1,8 +1,5 @@
 export 'package:scommconnector/core/errors/errors.dart';
 export 'package:scommconnector/core/di/service_locator.dart';
-export 'package:scommconnector/core/config/webrtc_config.dart';
-
-
 export 'package:scommconnector/features/auth/auth.dart';
 export 'package:scommconnector/features/webrtc/webrtc.dart';
 export 'package:scommconnector/features/identity/identity.dart';
@@ -16,6 +13,7 @@ export 'package:scommconnector/features/connect/datachannel/scomm_transfer_speed
 
 
 import 'package:scommconnector/core/di/service_locator.dart';
+import 'package:scommconnector/core/logging/log.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 
@@ -23,6 +21,7 @@ export 'package:scommconnector/scomm_connector_controller.dart';
 export 'package:scommconnector/scomm_start_config.dart';
 
 Future<void> runScommConnectorDI(String host, int port, bool useTls) async {
+  infoLog("Host: $host, Port: $port, Use TLS: $useTls");
   await setupDependencies(host: host, port: port, useTls: useTls);
 }
 

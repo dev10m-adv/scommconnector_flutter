@@ -54,17 +54,17 @@ class AuthLocalDataSourceImpl implements AuthLocalDataSource {
   }
   
   @override
-  Future<String?> getLastUsedUserId() async {
-    return secureStorage.read(key: 'last_used_user_id');
+  Future<String?> getLastUsedUserEmail() async {
+    return secureStorage.read(key: 'last_used_user_email');
   }
   
   @override
-  Future<void> saveLastUsedUserId(String userId) {
-    return secureStorage.write(key: 'last_used_user_id', value: userId);
+  Future<void> saveLastUsedUserEmail(String email) {
+    return secureStorage.write(key: 'last_used_user_email', value: email);
   }
 
   @override
-  Future<void> removeLastUsedUserId() {
-    return secureStorage.delete(key: 'last_used_user_id');
+  Future<void> removeLastUsedUserEmail() {
+    return secureStorage.delete(key: 'last_used_user_email');
   }
 }

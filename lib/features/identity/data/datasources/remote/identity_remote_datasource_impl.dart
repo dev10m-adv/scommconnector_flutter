@@ -48,11 +48,6 @@ class IdentityRemoteDataSourceImpl implements IdentityRemoteDataSource {
   }
 
   @override
-  Future<List<DeviceModel>> listUserDevices({required String userId}) {
-    return grpcClient.listUserDevices(userId: userId);
-  }
-
-  @override
   Future<DeviceServiceModel> registerService({
     required String deviceId,
     required String serviceName,

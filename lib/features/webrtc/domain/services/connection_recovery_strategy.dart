@@ -11,7 +11,7 @@ abstract class IConnectionRecoveryStrategy {
   ///
   /// Returns the new offer SDP if successful.
   /// Throws [ServerException] if recovery fails after retries.
-  Future<WebRtcSessionDescription> recover();
+  Future<WebRtcSessionDescription> recover({required String sessionId});
 
   /// Check if recovery is currently in progress.
   bool get isRecovering;
@@ -43,28 +43,28 @@ class ConnectionRecoveryStrategy implements IConnectionRecoveryStrategy {
   bool get isRecovering => _isRecovering;
 
   @override
-  Future<WebRtcSessionDescription> recover() async {
+  Future<WebRtcSessionDescription> recover({required String sessionId}) async {
     if (_isRecovering) {
       throw const ServerException(message: 'Recovery already in progress.');
     }
 
     _isRecovering = true;
     try {
-      return await _attemptRecovery();
+      return await _attemptRecovery(sessionId: sessionId);
     } finally {
       _isRecovering = false;
     }
   }
 
-  Future<WebRtcSessionDescription> _attemptRecovery() async {
+  Future<WebRtcSessionDescription> _attemptRecovery({required String sessionId}) async {
     for (var attempt = 0; attempt < _retrySchedule.length; attempt++) {
       try {
         await onRecoveryAttempt?.call(attempt + 1, true);
-        return await restartIceAndCreateOfferUseCase();
+        return await restartIceAndCreateOfferUseCase.call(sessionId: sessionId);
       } catch (_) {
         if (attempt == _retrySchedule.length - 1) {
           // Final attempt failed
-          await closeWebRtcUseCase();
+          await closeWebRtcUseCase.call(sessionId: sessionId);
           throw const ServerException(
             message: 'WebRTC recovery failed after multiple attempts.',
           );

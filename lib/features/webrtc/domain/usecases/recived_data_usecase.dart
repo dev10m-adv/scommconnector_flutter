@@ -1,10 +1,13 @@
+import 'package:scommconnector/features/webrtc/application/webrtc_manager.dart';
 import 'package:scommconnector/features/webrtc/domain/entities/webrtc_data_message.dart';
-import '../repositories/webrtc_repository.dart';
 
 class RecivedDataUsecase {
-  final WebRtcRepository repository;
+  final WebRtcSessionManager manager;
 
-  const RecivedDataUsecase(this.repository);
+  const RecivedDataUsecase(this.manager);
 
-  Stream<WebRtcDataMessage> call() => repository.dataMessages;
+  Stream<WebRtcDataMessage> call({required String sessionId}) {
+    final repository = manager.getOrCreate(sessionId);
+    return repository.dataMessages;
+  }
 }

@@ -6,26 +6,37 @@ class SignalingRepositoryImpl implements SignalingRepository {
   final SignalingServiceGrpcClient grpcClient;
 
   const SignalingRepositoryImpl({required this.grpcClient});
-
+  
   @override
-  Stream<SignalEnvelope> connect({required String deviceId}) {
+  Future<void> connect({required String deviceId}) {
     return grpcClient.connect(deviceId: deviceId);
   }
-
+  
   @override
-  Future<void> sendEnvelope(SignalEnvelope envelope) {
-    return grpcClient.sendEnvelope(envelope);
-  }
-
-  @override
-  Stream<SignalingPresenceEvent> watchPresence({
-    required List<String> targetUris,
-  }) {
-    return grpcClient.watchPresence(targetUris: targetUris);
-  }
-
+  Stream<SignalingConnectionStatus> get connectionStatus => grpcClient.connectionStatus;
+  
   @override
   Future<void> disconnect() {
     return grpcClient.disconnect();
   }
+  
+  @override
+  Future<void> dispose() {
+    return grpcClient.dispose();
+  }
+  
+  @override
+  // TODO: implement messages
+  Stream<SignalingEnvelope> get messages => grpcClient.messages;
+  
+  @override
+  Future<void> sendEnvelope(SignalingEnvelope envelope) {
+    return grpcClient.sendEnvelope(envelope);
+  }
+  
+  @override
+  Stream<SignalingPresenceEvent> watchPresence({required List<String> targetUris}) {
+    return grpcClient.watchPresence(targetUris: targetUris);
+  }
+  
 }

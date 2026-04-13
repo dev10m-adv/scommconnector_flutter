@@ -11,7 +11,7 @@ class ExchangeExternalTokenUseCase {
     return repository.exchangeExternalProviderToken(
       provider: params.provider,
       externalAccessToken: params.externalAccessToken,
-      userId: params.userId,
+      email: params.email,
     );
   }
 }

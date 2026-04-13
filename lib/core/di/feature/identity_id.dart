@@ -52,7 +52,6 @@ Future<void> identityDI(
       updateDeviceUseCase: UpdateDeviceUseCase(sl<IdentityRepository>()),
       deleteDeviceUseCase: DeleteDeviceUseCase(sl<IdentityRepository>()),
       listMyDevicesUseCase: ListMyDevicesUseCase(sl<IdentityRepository>()),
-      listUserDevicesUseCase: ListUserDevicesUseCase(sl<IdentityRepository>()),
       registerServiceUseCase: RegisterServiceUseCase(sl<IdentityRepository>()),
       listDeviceServicesUseCase: ListDeviceServicesUseCase(sl<IdentityRepository>()),
       updateServiceUseCase: UpdateServiceUseCase(sl<IdentityRepository>()),

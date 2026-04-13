@@ -25,7 +25,7 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<AuthTokens> exchangeExternalProviderToken({
     required String provider,
     required String externalAccessToken,
-    required String userId,
+    required String email,
   }) async {
     final response = await remoteDataSource.exchangeExternalProviderToken(
       ExchangeExternalTokenRequestModel(
@@ -34,9 +34,9 @@ class AuthRepositoryImpl implements AuthRepository {
       ),
     );
 
-    await localDataSource.saveTokens(response, userId);
-    /// Save the last used user ID for future token retrieval attempts
-    await localDataSource.saveLastUsedUserId(userId);
+    await localDataSource.saveTokens(response, email);
+    /// Save the last used user email for future token retrieval attempts
+    await localDataSource.saveLastUsedUserEmail(email);
     return response.toEntity();
   }
 
@@ -44,7 +44,7 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<AuthTokens> exchangeImapCredentials({
     required String provider,
     required ImapCredentials imapCredentials,
-    required String userId,
+    required String email,
   }) async {
     final response = await remoteDataSource.exchangeImapCredentials(
       ExchangeImapCredentialsRequestModel(
@@ -53,16 +53,16 @@ class AuthRepositoryImpl implements AuthRepository {
       ),
     );
 
-    await localDataSource.saveTokens(response, userId);
-    /// Save the last used user ID for future token retrieval attempts
-    await localDataSource.saveLastUsedUserId(userId);
+    await localDataSource.saveTokens(response, email);
+    /// Save the last used user email for future token retrieval attempts
+    await localDataSource.saveLastUsedUserEmail(email);
     return response.toEntity();
   }
 
   @override
   Future<AuthTokens> refreshTokens({
     required String refreshToken,
-    required String userId,
+    required String email,
 
   }) async {
     final response = await remoteDataSource.refreshTokens(
@@ -71,15 +71,15 @@ class AuthRepositoryImpl implements AuthRepository {
       ),
     );
 
-    await localDataSource.saveTokens(response, userId);
-    /// Save the last used user ID for future token retrieval attempts
-    await localDataSource.saveLastUsedUserId(userId);
+    await localDataSource.saveTokens(response, email);
+    /// Save the last used user email for future token retrieval attempts
+    await localDataSource.saveLastUsedUserEmail(email);
     return response.toEntity();
   }
 
   @override
-  Future<String?> getStoredAccessToken({required String userId}) async {
-    final storedTokens = await localDataSource.loadTokens(userId);
+  Future<String?> getStoredAccessToken({required String email}) async {
+    final storedTokens = await localDataSource.loadTokens(email);
     if (storedTokens == null || storedTokens.accessToken.isEmpty) {
       return null;
     }
@@ -89,7 +89,7 @@ class AuthRepositoryImpl implements AuthRepository {
     }
 
     if (storedTokens.refreshToken.isEmpty) {
-      await localDataSource.clearUserToken(userId);
+      await localDataSource.clearUserToken(email);
       throw const UnauthorizedException(message: _reauthMessage);
     }
 
@@ -98,10 +98,10 @@ class AuthRepositoryImpl implements AuthRepository {
         RefreshAccessTokenRequestModel(refreshToken: storedTokens.refreshToken),
       );
 
-      await localDataSource.saveTokens(refreshedTokens, userId);
+      await localDataSource.saveTokens(refreshedTokens, email);
       return refreshedTokens.accessToken;
     } on UnauthorizedException {
-      await localDataSource.clearUserToken(userId);
+      await localDataSource.clearUserToken(email);
       throw const UnauthorizedException(message: _reauthMessage);
     }
   }
@@ -124,17 +124,17 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<void> clearUserToken({required String userId}) async {
-    await localDataSource.clearUserToken(userId);
+  Future<void> clearUserToken({required String email}) async {
+    await localDataSource.clearUserToken(email);
   }
   
   @override
-  Future<String?> getLastUsedUserId() {
-    return localDataSource.getLastUsedUserId();
+  Future<String?> getLastUserEmail() {
+    return localDataSource.getLastUsedUserEmail();
   }
   
   @override
-  Future<void> removeLastUsedUserId() {
-    return localDataSource.removeLastUsedUserId();
+  Future<void> removeLastUserEmail() {
+    return localDataSource.removeLastUsedUserEmail();
   }
 }
