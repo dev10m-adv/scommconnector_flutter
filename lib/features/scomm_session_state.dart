@@ -26,6 +26,7 @@ class ScommSessionState extends Equatable {
   });
 
   bool get canStartRealtime => isAuthenticated && isDeviceRegistered;
+  int get connectedDeviceCount => connectedRemoteUris.length;
 
   ScommSessionState copyWith({
     bool? isAuthenticated,
