@@ -19,6 +19,7 @@ dependencies:
   grpc: ^5.1.0
   flutter_webrtc: ^1.4.1
   signals: ^6.3.0
+  equatable: ^2.0.8
 
 dev_dependencies:
   lints: ^6.0.0

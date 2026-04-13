@@ -2,14 +2,17 @@ import 'package:scommconnector/features/auth/auth.dart';
 import 'package:scommconnector/features/identity/identity.dart';
 import 'package:scommconnector/features/signaling/signaling.dart';
 import 'package:scommconnector/features/webrtc/webrtc.dart';
+import 'package:equatable/equatable.dart';
 
-class ScommSessionState {
+class ScommSessionState extends Equatable {
   final bool isAuthenticated;
   final bool isDeviceRegistered;
   final AuthState authState;
   final IdentityState identityState;
   final SignalingState signalingState;
   final WebRtcState webRtcState;
+  final String? activeRemoteUri;
+  final List<String> connectedRemoteUris;
 
   const ScommSessionState({
     required this.isAuthenticated,
@@ -18,6 +21,8 @@ class ScommSessionState {
     required this.identityState,
     required this.signalingState,
     required this.webRtcState,
+    this.activeRemoteUri,
+    this.connectedRemoteUris = const <String>[],
   });
 
   bool get canStartRealtime => isAuthenticated && isDeviceRegistered;
@@ -29,6 +34,9 @@ class ScommSessionState {
     IdentityState? identityState,
     SignalingState? signalingState,
     WebRtcState? webRtcState,
+    String? activeRemoteUri,
+    List<String>? connectedRemoteUris,
+    bool clearActiveRemoteUri = false,
   }) {
     return ScommSessionState(
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
@@ -37,6 +45,11 @@ class ScommSessionState {
       identityState: identityState ?? this.identityState,
       signalingState: signalingState ?? this.signalingState,
       webRtcState: webRtcState ?? this.webRtcState,
+      activeRemoteUri: clearActiveRemoteUri
+          ? null
+          : (activeRemoteUri ?? this.activeRemoteUri),
+      connectedRemoteUris:
+          connectedRemoteUris ?? List<String>.from(this.connectedRemoteUris),
     );
   }
 
@@ -48,6 +61,8 @@ class ScommSessionState {
       identityState: IdentityState.initial(),
       signalingState: SignalingState.initial(),
       webRtcState: WebRtcState.initial(),
+      activeRemoteUri: null,
+      connectedRemoteUris: const <String>[],
     );
   }
 
@@ -60,6 +75,8 @@ class ScommSessionState {
       'identityState': identityState.toJson(),
       'signalingState': signalingState.toJson(),
       'webRtcState': webRtcState.toJson(),
+      'activeRemoteUri': activeRemoteUri,
+      'connectedRemoteUris': connectedRemoteUris,
     };
   }
 
@@ -74,6 +91,23 @@ class ScommSessionState {
           SignalingState.fromJson(json['signalingState'] as Map<String, dynamic>),
       webRtcState:
           WebRtcState.fromJson(json['webRtcState'] as Map<String, dynamic>),
+        activeRemoteUri: json['activeRemoteUri'] as String?,
+      connectedRemoteUris: (json['connectedRemoteUris'] as List?)
+              ?.map((item) => item.toString())
+              .toList(growable: false) ??
+          const <String>[],
     );
   }
+
+  @override
+  List<Object?> get props => [
+        isAuthenticated,
+        isDeviceRegistered,
+        authState,
+        identityState,
+        signalingState,
+        webRtcState,
+        activeRemoteUri,
+        connectedRemoteUris,
+      ];
 }

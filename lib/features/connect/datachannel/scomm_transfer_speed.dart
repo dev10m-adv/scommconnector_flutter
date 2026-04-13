@@ -13,4 +13,11 @@ class ScommTransferSpeed {
       'receivedBytesPerSecond': receivedBytesPerSecond,
     };
   }
+
+  factory ScommTransferSpeed.fromJson(Map<String, dynamic> json) {
+    return ScommTransferSpeed(
+      sentBytesPerSecond: json['sentBytesPerSecond'] ?? 0,
+      receivedBytesPerSecond: json['receivedBytesPerSecond'] ?? 0,
+    );
+  }
 }

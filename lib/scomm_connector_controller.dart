@@ -98,28 +98,49 @@ class ScommConnectorController {
   }
 
   void _emitSession(ScommSessionState next) {
-    print('Emitting new session state: $next');
+    if (_sessionState == next) return;
     _sessionState = next;
     _sessionStateController.add(next);
   }
 
-  void _syncSessionState() {
-    final auth = _authController.state;
-    final identity = _identityController.state;
-    final signaling = _connectController.signalingController.state;
-    final webrtc = webrtcState;
+void _syncSessionState() {
+  final auth = _authController.state;
+  final identity = _identityController.state;
+  final signaling = _connectController.signalingController.state;
+  final webrtc = webrtcState;
 
-    _emitSession(
-      ScommSessionState(
-        isAuthenticated: auth.isLoggedIn,
-        isDeviceRegistered: identity.isRegistered,
-        authState: auth,
-        identityState: identity,
-        signalingState: signaling,
-        webRtcState: webrtc,
-      ),
-    );
-  }
+  final connectedRemoteUris = _connectController.sessionStore.all
+      .where((session) {
+        final status = _webrtccontroller.stateOf(session.sessionId).status;
+        return status == WebRtcStatus.connected ||
+            status == WebRtcStatus.negotiating ||
+            status == WebRtcStatus.retrying;
+      })
+      .map((session) => session.remoteUri)
+      .where((uri) => uri.trim().isNotEmpty)
+      .toSet()
+      .toList(growable: false)
+    ..sort();
+
+  final selectedRemoteUri = _connectController.selectedSession?.remoteUri;
+  final activeRemoteUri = selectedRemoteUri != null &&
+          connectedRemoteUris.contains(selectedRemoteUri)
+      ? selectedRemoteUri
+      : (connectedRemoteUris.isNotEmpty ? connectedRemoteUris.first : null);
+
+  _emitSession(
+    ScommSessionState(
+      isAuthenticated: auth.isLoggedIn,
+      isDeviceRegistered: identity.isRegistered,
+      authState: auth,
+      identityState: identity,
+      signalingState: signaling,
+      webRtcState: webrtc,
+      activeRemoteUri: activeRemoteUri,
+      connectedRemoteUris: connectedRemoteUris,
+    ),
+  );
+}
 
   ///////// Authentication methods ///////////
 
@@ -378,12 +399,22 @@ class ScommConnectorController {
   Future<void> stopWebRtc() async {
     final sessionId = _connectController.selectedSession?.sessionId;
     if (sessionId != null) {
-      await _connectController.stopWebRtcSession(sessionId);
-      await _dataMessageSubscriptions.remove(sessionId)?.cancel();
-      _requestSessionByRequestId.removeWhere(
-        (_, mapped) => mapped == sessionId,
-      );
-      // _boundDataSessionId = null;
+      await _stopWebRtcSession(sessionId);
+    }
+  }
+
+  Future<void> stopWebRtcForUri(String remoteUri) async {
+    final session = _connectController.sessionStore.getByRemoteUri(remoteUri);
+    if (session != null) {
+      await _stopWebRtcSession(session.sessionId);
+    }
+  }
+
+  Future<void> _stopWebRtcSession(String sessionId) async {
+    await _connectController.stopWebRtcSession(sessionId);
+    await _dataMessageSubscriptions.remove(sessionId)?.cancel();
+    _requestSessionByRequestId.removeWhere((_, mapped) => mapped == sessionId);
+    if (_connectController.selectedSessionId == null) {
       await _iceRouteSubscription?.cancel();
       _iceRouteSubscription = null;
       _resetTransferSpeed();
@@ -423,14 +454,6 @@ class ScommConnectorController {
       return const Stream.empty();
     }
     return _webrtccontroller.connectionStates(sessionId);
-  }
-
-  Stream<WebRtcIceCandidate> get localIceCandidates {
-    final sessionId = _connectController.selectedSessionId;
-    if (sessionId == null) {
-      return const Stream.empty();
-    }
-    return _webrtccontroller.localIceCandidates(sessionId);
   }
 
   Stream<WebRtcDataMessage> get webrtcDataMessages {
