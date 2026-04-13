@@ -1,11 +1,12 @@
-import '../repositories/webrtc_repository.dart';
+import 'package:scommconnector/features/webrtc/application/webrtc_manager.dart';
 
 class RemoveDataChannelUseCase {
-  final WebRtcRepository repository;
+  final WebRtcSessionManager manager;
 
-  const RemoveDataChannelUseCase(this.repository);
+  const RemoveDataChannelUseCase(this.manager);
 
-  Future<void> call(String label) {
+  Future<void> call({required String sessionId, required String label}) {
+    final repository = manager.getOrCreate(sessionId);
     return repository.removeDataChannel(label);
   }
 }

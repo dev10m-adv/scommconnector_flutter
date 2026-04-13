@@ -41,4 +41,6 @@ abstract class WebRtcRepository {
   Future<WebRtcSessionDescription> restartIceAndCreateOffer();
 
   Future<void> close();
+
+  Future<void> dispose();
 }

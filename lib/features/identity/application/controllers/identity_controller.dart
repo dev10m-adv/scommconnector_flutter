@@ -14,11 +14,9 @@ import '../../domain/usecases/delete_device_usecase.dart';
 import '../../domain/usecases/delete_service_usecase.dart';
 import '../../domain/usecases/list_device_services_usecase.dart';
 import '../../domain/usecases/list_my_devices_usecase.dart';
-import '../../domain/usecases/list_user_devices_usecase.dart';
 import '../../domain/usecases/params/delete_device_params.dart';
 import '../../domain/usecases/params/delete_service_params.dart';
 import '../../domain/usecases/params/list_device_services_params.dart';
-import '../../domain/usecases/params/list_user_devices_params.dart';
 import '../../domain/usecases/params/register_device_params.dart';
 import '../../domain/usecases/params/register_service_params.dart';
 import '../../domain/usecases/params/update_device_params.dart';
@@ -34,7 +32,6 @@ class IdentityController {
   final UpdateDeviceUseCase updateDeviceUseCase;
   final DeleteDeviceUseCase deleteDeviceUseCase;
   final ListMyDevicesUseCase listMyDevicesUseCase;
-  final ListUserDevicesUseCase listUserDevicesUseCase;
   final RegisterServiceUseCase registerServiceUseCase;
   final ListDeviceServicesUseCase listDeviceServicesUseCase;
   final UpdateServiceUseCase updateServiceUseCase;
@@ -52,7 +49,6 @@ class IdentityController {
     required this.updateDeviceUseCase,
     required this.deleteDeviceUseCase,
     required this.listMyDevicesUseCase,
-    required this.listUserDevicesUseCase,
     required this.registerServiceUseCase,
     required this.listDeviceServicesUseCase,
     required this.updateServiceUseCase,
@@ -75,12 +71,12 @@ class IdentityController {
   }
 
 
-  Future<SavedDeviceIdentity?> loadSavedDeviceIdentity(String userId) async {
+  Future<SavedDeviceIdentity?> loadSavedDeviceIdentity(String email) async {
     _setLoading();
 
     try {
       final savedIdentity = await registerDeviceUseCase.repository
-          .loadSavedDeviceIdentity(userId);
+          .loadSavedDeviceIdentity(email);
 
       _state = _state.copyWith(
         status: IdentityStatus.success,
@@ -172,21 +168,6 @@ class IdentityController {
 
     try {
       final devices = await listMyDevicesUseCase();
-      _setDevicesSuccess(devices);
-      return devices;
-    } catch (error) {
-      _setFailure(error);
-      rethrow;
-    }
-  }
-
-  Future<List<IdentityDevice>> listUserDevices({required String userId}) async {
-    _setLoading();
-
-    try {
-      final devices = await listUserDevicesUseCase(
-        ListUserDevicesParams(userId: userId),
-      );
       _setDevicesSuccess(devices);
       return devices;
     } catch (error) {

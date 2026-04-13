@@ -50,7 +50,9 @@ class ScommConnectorController {
   final _authController = scommDi<ScommAuthController>();
   final _stateChangesController = StreamController<void>.broadcast();
   late ScommDatachannelController _datachannelController;
-  StreamSubscription<WebRtcDataMessage>? _dataMessageSubscription;
+  final _dataMessageSubscriptions =
+      <String, StreamSubscription<WebRtcDataMessage>>{};
+  final _requestSessionByRequestId = <String, String>{};
   StreamSubscription<AuthState>? _authStateSubscription;
   final _incomingRequestCache = <String, SignalEnvelope>{};
   Timer? _transferSpeedTimer;
@@ -78,30 +80,34 @@ class ScommConnectorController {
   // Snapshot states for consumers that need synchronous reads.
 
   IdentityState get identityState => _identityController.state;
-  WebRtcState get webrtcState => _webrtccontroller.state;
+  WebRtcState get webrtcState {
+    final sessionId = _connectController.selectedSessionId;
+    if (sessionId == null) return const WebRtcState();
+    return _webrtccontroller.stateOf(sessionId);
+  }
+
   SignalingState get signalingState =>
       _connectController.signalingController.state;
   Stream<void> get stateChanges => _stateChangesController.stream;
 
   bool _canSendDataChannel() {
-    final status = _webrtccontroller.state.status;
+    final status = webrtcState.status;
     return status == WebRtcStatus.connected ||
         status == WebRtcStatus.negotiating ||
         status == WebRtcStatus.retrying;
   }
 
-
   void _emitSession(ScommSessionState next) {
+    print('Emitting new session state: $next');
     _sessionState = next;
     _sessionStateController.add(next);
   }
 
   void _syncSessionState() {
-    print('Syncing session state...');
     final auth = _authController.state;
     final identity = _identityController.state;
     final signaling = _connectController.signalingController.state;
-    final webrtc = _webrtccontroller.state;
+    final webrtc = webrtcState;
 
     _emitSession(
       ScommSessionState(
@@ -127,10 +133,14 @@ class ScommConnectorController {
     await _iceRouteSubscription?.cancel();
 
     _authSub = _authController.authStates.listen((_) => _syncSessionState());
-    _identitySub = _identityController.identityStates.listen((_) => _syncSessionState());
-    _signalingSub = _connectController.signalingController.signalingStates.listen((_) => _syncSessionState());
-    _webrtcSub = _webrtccontroller.webRtcStates.listen((_) => _syncSessionState());
-    _iceRouteSubscription = _webrtccontroller.iceRoutes.listen((route) {_setIceRoute(route);});
+    _identitySub = _identityController.identityStates.listen(
+      (_) => _syncSessionState(),
+    );
+    _signalingSub = _connectController.signalingController.signalingStates
+        .listen((_) => _syncSessionState());
+    _webrtcSub = _webrtccontroller.webRtcStates.listen(
+      (_) => _syncSessionState(),
+    );
 
     _syncSessionState();
   }
@@ -138,12 +148,12 @@ class ScommConnectorController {
   Future<void> login(ScommLoginConfig config) async {
     if (config is ScommTokenExchangeLoginConfig) {
       print(
-        'Starting token exchange authentication for user ${config.userId} with provider ${config.provider}',
+        'Starting token exchange authentication for user ${config.email} with provider ${config.provider}',
       );
       await _authController.exchangeProviderToken(
         provider: config.provider,
         externalAccessToken: config.externalAccessToken,
-        userId: config.userId,
+        email: config.email,
       );
     } else if (config is ScommImapLoginConfig) {
       await _authController.exchangeImapLogin(
@@ -152,7 +162,7 @@ class ScommConnectorController {
           password: config.password,
           host: config.host,
           port: config.port,
-          userId: config.email,
+          useTls: config.useTls,
         ),
       );
     }
@@ -162,11 +172,11 @@ class ScommConnectorController {
 
   Future<void> refreshAccessToken({
     required String refreshToken,
-    required String userId,
+    required String email,
   }) {
     return _authController.refreshAccessToken(
       refreshToken: refreshToken,
-      userId: userId,
+      email: email,
     );
   }
 
@@ -195,9 +205,6 @@ class ScommConnectorController {
 
   Future<List<IdentityDevice>> listAllowlistedDevices(String myDeviceId) =>
       _identityController.listAllowUserDevices(deviceId: myDeviceId);
-
-  Future<List<IdentityDevice>> listUserDevices(String userId) =>
-      _identityController.listUserDevices(userId: userId);
 
   Future<SavedDeviceIdentity?> loadMyCurrentDeviceIdentity(String userId) =>
       _identityController.loadSavedDeviceIdentity(userId);
@@ -282,10 +289,8 @@ class ScommConnectorController {
 
   ///// Connection and DataChannel methods //////////
   Future<void> start(ScommStartConfig config) async {
-    print(
-      'ScommConnector : start with deviceId=${config.deviceId}, serverAddress=${config.serverAddress}, iceServers=${config.iceServers}',
-    );
-    final localUri = 'scomm:${config.userId}/${config.deviceId}';
+    final localUri = 'scomm:${config.email}/${config.deviceId}';
+
     await _connectController.start(
       deviceId: config.deviceId,
       localUri: localUri,
@@ -293,22 +298,97 @@ class ScommConnectorController {
       iceServers: config.iceServers,
     );
 
-    _dataMessageSubscription ??= _webrtccontroller.receivedDataMessages.listen((
-      message,
-    ) {
-      if (message.channelLabel != ScommDataChannelTransport.mainChannel) {
-        return;
+    for (final sub in _dataMessageSubscriptions.values) {
+      await sub.cancel();
+    }
+    _dataMessageSubscriptions.clear();
+    _requestSessionByRequestId.clear();
+  }
+
+  Future<void> bindSelectedSessionStreams() async {
+    final sessionId = _connectController.selectedSessionId;
+    if (sessionId == null) {
+      for (final sub in _dataMessageSubscriptions.values) {
+        await sub.cancel();
       }
-      _recordReceivedPayload(message.message);
-      _datachannelController.receiveRawMessage(message.message);
-    });
+      _dataMessageSubscriptions.clear();
+      _requestSessionByRequestId.clear();
+      // _boundDataSessionId = null;
+      await _iceRouteSubscription?.cancel();
+      _iceRouteSubscription = null;
+      return;
+    }
+
+    final activeSessionIds = _connectController.sessionStore.sessionIds.toSet();
+
+    final staleSubscriptions = _dataMessageSubscriptions.keys
+        .where((id) => !activeSessionIds.contains(id))
+        .toList(growable: false);
+    for (final staleSessionId in staleSubscriptions) {
+      await _dataMessageSubscriptions.remove(staleSessionId)?.cancel();
+    }
+
+    final staleRequestMappings = _requestSessionByRequestId.entries
+        .where((entry) => !activeSessionIds.contains(entry.value))
+        .map((entry) => entry.key)
+        .toList(growable: false);
+    for (final requestId in staleRequestMappings) {
+      _requestSessionByRequestId.remove(requestId);
+    }
+
+    for (final activeSessionId in activeSessionIds) {
+      if (_dataMessageSubscriptions.containsKey(activeSessionId)) {
+        continue;
+      }
+
+      _dataMessageSubscriptions[activeSessionId] = _webrtccontroller
+          .receivedDataMessages(activeSessionId)
+          .listen((message) async {
+            if (message.channelLabel != ScommDataChannelTransport.mainChannel) {
+              return;
+            }
+            _recordReceivedPayload(message.message);
+            final parsed = await _datachannelController.receiveRawMessage(
+              message.message,
+            );
+            final requestId = parsed?.requestId?.trim();
+            if (requestId != null && requestId.isNotEmpty) {
+              _requestSessionByRequestId[requestId] = activeSessionId;
+            }
+          });
+    }
+    // _boundDataSessionId = sessionId;
+
+    await _iceRouteSubscription?.cancel();
+    _iceRouteSubscription = _webrtccontroller
+        .iceRoutes(sessionId)
+        .listen(_setIceRoute);
   }
 
   Future<void> stop() async {
+    await stopWebRtc();
+    await stopSignaling();
+  }
+
+  Future<void> stopSignaling() async {
     _incomingRequestCache.clear();
-    _resetTransferSpeed();
-    _setIceRoute(const WebRtcIceRoute());
-    await _connectController.stop();
+    await _connectController.stopSignaling();
+  }
+
+  Future<void> stopWebRtc() async {
+    final sessionId = _connectController.selectedSession?.sessionId;
+    if (sessionId != null) {
+      await _connectController.stopWebRtcSession(sessionId);
+      await _dataMessageSubscriptions.remove(sessionId)?.cancel();
+      _requestSessionByRequestId.removeWhere(
+        (_, mapped) => mapped == sessionId,
+      );
+      // _boundDataSessionId = null;
+      await _iceRouteSubscription?.cancel();
+      _iceRouteSubscription = null;
+      _resetTransferSpeed();
+      _setIceRoute(const WebRtcIceRoute());
+    }
   }
 
   Future<void> dispose() async {
@@ -318,8 +398,11 @@ class ScommConnectorController {
     await _webrtcSub?.cancel();
     await _iceRouteSubscription?.cancel();
     await _authStateSubscription?.cancel();
-    await _dataMessageSubscription?.cancel();
-    _dataMessageSubscription = null;
+    for (final sub in _dataMessageSubscriptions.values) {
+      await sub.cancel();
+    }
+    _dataMessageSubscriptions.clear();
+    _requestSessionByRequestId.clear();
     _transferSpeedTimer?.cancel();
     await _transferSpeedController.close();
     await _iceRouteController.close();
@@ -334,17 +417,36 @@ class ScommConnectorController {
     await start(config);
   }
 
-  Stream<WebRtcConnectionState> get scommConnectionState =>
-      _webrtccontroller.connectionStates;
+  Stream<WebRtcConnectionState> get scommConnectionState {
+    final sessionId = _connectController.selectedSessionId;
+    if (sessionId == null) {
+      return const Stream.empty();
+    }
+    return _webrtccontroller.connectionStates(sessionId);
+  }
 
-  Stream<WebRtcIceCandidate> get localIceCandidates =>
-      _webrtccontroller.localIceCandidates;
+  Stream<WebRtcIceCandidate> get localIceCandidates {
+    final sessionId = _connectController.selectedSessionId;
+    if (sessionId == null) {
+      return const Stream.empty();
+    }
+    return _webrtccontroller.localIceCandidates(sessionId);
+  }
 
-  Stream<WebRtcDataMessage> get webrtcDataMessages =>
-      _webrtccontroller.receivedDataMessages;
+  Stream<WebRtcDataMessage> get webrtcDataMessages {
+    final sessionId = _connectController.selectedSessionId;
+    if (sessionId == null) {
+      return const Stream.empty();
+    }
+    return _webrtccontroller.receivedDataMessages(sessionId);
+  }
 
   Future<WebRtcIceRoute> refreshIceRoute() {
-    return _webrtccontroller.refreshIceRoute();
+    final sessionId = _connectController.selectedSessionId;
+    if (sessionId == null) {
+      return Future.value(const WebRtcIceRoute());
+    }
+    return _webrtccontroller.refreshIceRoute(sessionId);
   }
 
   Stream<SignalEnvelope> get scommConnectionIncomingRequests =>
@@ -390,11 +492,15 @@ class ScommConnectorController {
     required String action,
     required Map<String, dynamic> data,
   }) {
-    return _datachannelController.sendResponse(
+    return _sendRoutedDataChannelMessage(
       requestId: requestId,
-      service: service,
-      action: action,
-      data: data,
+      message: ScommRemoteMessage(
+        type: ScommMessageType.response,
+        requestId: requestId,
+        service: service,
+        action: action,
+        data: data,
+      ),
     );
   }
 
@@ -404,11 +510,15 @@ class ScommConnectorController {
     required String action,
     required Map<String, dynamic> data,
   }) {
-    return _datachannelController.sendStream(
+    return _sendRoutedDataChannelMessage(
       requestId: requestId,
-      service: service,
-      action: action,
-      data: data,
+      message: ScommRemoteMessage(
+        type: ScommMessageType.stream,
+        requestId: requestId,
+        service: service,
+        action: action,
+        data: data,
+      ),
     );
   }
 
@@ -429,9 +539,17 @@ class ScommConnectorController {
   }
 
   ///// Is DataChannel open
-  Stream<bool> get isDataChannelOpen => _webrtccontroller.connectionStates
-      .map((state) => state == WebRtcConnectionState.connected)
-      .distinct();
+  Stream<bool> get isDataChannelOpen {
+    final sessionId = _connectController.selectedSessionId;
+    if (sessionId == null) {
+      return Stream<bool>.value(false);
+    }
+
+    return _webrtccontroller
+        .connectionStates(sessionId)
+        .map((state) => state == WebRtcConnectionState.connected)
+        .distinct();
+  }
 
   Future<void> acceptConnectionRequest(String requestId) async {
     final request = _incomingRequestCache.remove(requestId);
@@ -443,6 +561,8 @@ class ScommConnectorController {
       requestEnvelope: request,
       accept: true,
     );
+
+    await bindSelectedSessionStreams();
   }
 
   Future<void> rejectConnectionRequest(
@@ -488,6 +608,8 @@ class ScommConnectorController {
       toUri: deviceId,
       serviceName: ScommDataChannelTransport.mainChannel,
     );
+
+    await bindSelectedSessionStreams();
   }
 
   Future<void> sendConnectionRequestDetailed({
@@ -505,19 +627,44 @@ class ScommConnectorController {
   }
 
   Future<void> setRemoteAnswer(WebRtcSessionDescription answer) {
-    return _webrtccontroller.setRemoteAnswer(answer);
+    final sessionId = _connectController.selectedSessionId;
+    if (sessionId == null) {
+      throw StateError('No active selected WebRTC session.');
+    }
+    return _webrtccontroller.setRemoteAnswer(
+      sessionId: sessionId,
+      answer: answer,
+    );
   }
 
   Future<void> addRemoteIceCandidate(WebRtcIceCandidate candidate) {
-    return _webrtccontroller.addRemoteIceCandidate(candidate);
+    final sessionId = _connectController.selectedSessionId;
+    if (sessionId == null) {
+      throw StateError('No active selected WebRTC session.');
+    }
+    return _webrtccontroller.addRemoteIceCandidate(
+      sessionId: sessionId,
+      candidate: candidate,
+    );
   }
 
   Future<void> addDataChannel(String label) {
-    return _webrtccontroller.addDataChannel(label);
+    final sessionId = _connectController.selectedSessionId;
+    if (sessionId == null) {
+      throw StateError('No active selected WebRTC session.');
+    }
+    return _webrtccontroller.addDataChannel(sessionId: sessionId, label: label);
   }
 
   Future<void> removeDataChannel(String label) {
-    return _webrtccontroller.removeDataChannel(label);
+    final sessionId = _connectController.selectedSessionId;
+    if (sessionId == null) {
+      throw StateError('No active selected WebRTC session.');
+    }
+    return _webrtccontroller.removeDataChannel(
+      sessionId: sessionId,
+      label: label,
+    );
   }
 
   bool _isOnlineStatus(String status) {
@@ -529,10 +676,35 @@ class ScommConnectorController {
     required String channelLabel,
     required String message,
   }) async {
+    final sessionId = _connectController.selectedSessionId;
+    if (sessionId == null) {
+      throw StateError('No active selected WebRTC session.');
+    }
+
+    await bindSelectedSessionStreams();
+
     _recordSentPayload(message);
     await _webrtccontroller.sendData(
+      sessionId: sessionId,
       channelLabel: channelLabel,
       message: message,
+    );
+  }
+
+  Future<void> _sendRoutedDataChannelMessage({
+    required String requestId,
+    required ScommRemoteMessage message,
+  }) async {
+    final sessionId = _requestSessionByRequestId[requestId.trim()];
+    if (sessionId == null || sessionId.isEmpty) {
+      return _datachannelController.transport.send(message);
+    }
+
+    _recordSentPayload(message.encode());
+    await _webrtccontroller.sendData(
+      sessionId: sessionId,
+      channelLabel: ScommDataChannelTransport.mainChannel,
+      message: message.encode(),
     );
   }
 

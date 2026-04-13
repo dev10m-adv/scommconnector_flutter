@@ -116,17 +116,6 @@ class IdentityServiceGrpcClientImpl implements IdentityServiceGrpcClient {
   }
 
   @override
-  Future<List<DeviceModel>> listUserDevices({required String userId}) async {
-    final response = await _executeWithNetworkGuard(() {
-      return _client.listUserDevices(
-        identity_pb.ListUserDevicesRequest(userId: userId),
-      );
-    });
-
-    return response.devices.map(_toDeviceModel).toList(growable: false);
-  }
-
-  @override
   Future<DeviceServiceModel> registerService({
     required String deviceId,
     required String serviceName,

@@ -1,9 +1,11 @@
+import 'package:scommconnector/features/webrtc/application/webrtc_manager.dart';
 import 'package:scommconnector/features/webrtc/domain/entities/webrtc_connection_state.dart';
 
-import '../repositories/webrtc_repository.dart';
-
 class ConnectionStateUseCase {
-  final WebRtcRepository repository;
-  const ConnectionStateUseCase(this.repository);
-  Stream<WebRtcConnectionState> call() => repository.connectionStates;
+  final WebRtcSessionManager manager;
+  const ConnectionStateUseCase(this.manager);
+  Stream<WebRtcConnectionState> call({required String sessionId}) {
+    final repository = manager.getOrCreate(sessionId);
+    return repository.connectionStates;
+  }
 }

@@ -10,7 +10,7 @@ class RefreshAccessTokenUseCase {
   Future<AuthTokens> call(RefreshAccessTokenParams params) {
     return repository.refreshTokens(
       refreshToken: params.refreshToken,
-      userId: params.userId,
+      email: params.email,
     );
   }
 }

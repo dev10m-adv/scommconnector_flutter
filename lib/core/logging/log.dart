@@ -9,7 +9,7 @@ class LogLevel {
 
 void debugLog(String message) {
   // developer.log("🐛 DEBUG: $message", name: 'ScommConnector', level: LogLevel.debug);
-  // print("🐛 DEBUG ScommConnector: $message");
+  print("🐛 DEBUG ScommConnector: $message");
 }
 
 void infoLog(String message) {

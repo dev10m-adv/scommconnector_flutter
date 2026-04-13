@@ -1,15 +1,18 @@
+import 'package:scommconnector/features/webrtc/application/webrtc_manager.dart';
+
 import '../entities/webrtc_ice_server_config.dart';
-import '../repositories/webrtc_repository.dart';
 
 class InitializeWebRtcUseCase {
-  final WebRtcRepository repository;
+  final WebRtcSessionManager manager;
 
-  const InitializeWebRtcUseCase(this.repository);
+  const InitializeWebRtcUseCase(this.manager);
 
   Future<void> call({
+    required String sessionId,
     required List<String> dataChannelLabels,
     List<WebRtcIceServerConfig>? iceServers,
   }) {
+    final repository = manager.getOrCreate(sessionId);
     return repository.initialize(
       dataChannelLabels: dataChannelLabels,
       iceServers: iceServers,

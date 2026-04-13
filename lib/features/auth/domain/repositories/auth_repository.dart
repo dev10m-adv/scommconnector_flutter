@@ -5,31 +5,31 @@ abstract class AuthRepository {
   Future<AuthTokens> exchangeExternalProviderToken({
     required String provider,
     required String externalAccessToken,
-    required String userId,
+    required String email,
   });
 
   Future<AuthTokens> exchangeImapCredentials({
     required String provider,
     required ImapCredentials imapCredentials,
-    required String userId,
+    required String email,
   });
 
   Future<AuthTokens> refreshTokens({
     required String refreshToken,
-    required String userId,
+    required String email,
   });
 
   Future<String?> getStoredAccessToken({
-    required String userId,
+    required String email,
   });
 
   Future<void> clearTokens();
 
   Future<void> clearUserToken({
-    required String userId,
+    required String email,
   });
 
 
-  Future<String?> getLastUsedUserId();
-  Future<void> removeLastUsedUserId();
+  Future<String?> getLastUserEmail();
+  Future<void> removeLastUserEmail();
 }

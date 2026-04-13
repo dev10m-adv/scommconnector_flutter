@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:scommconnector/features/webrtc/domain/usecases/connection_state_usecase.dart';
+import 'package:scommconnector/features/webrtc/application/webrtc_manager.dart';
 
 import '../../../../core/errors/errors.dart';
 import '../../../../core/logging/log.dart';
@@ -11,36 +11,21 @@ import '../../domain/entities/webrtc_ice_candidate.dart';
 import '../../domain/entities/webrtc_ice_route.dart';
 import '../../domain/entities/webrtc_ice_server_config.dart';
 import '../../domain/entities/webrtc_session_description.dart';
+import '../../domain/services/connection_recovery_strategy.dart';
 import '../../domain/usecases/add_data_channel_usecase.dart';
 import '../../domain/usecases/add_remote_ice_candidate_usecase.dart';
 import '../../domain/usecases/close_webrtc_usecase.dart';
+import '../../domain/usecases/connection_state_usecase.dart';
 import '../../domain/usecases/create_webrtc_answer_usecase.dart';
 import '../../domain/usecases/create_webrtc_offer_usecase.dart';
 import '../../domain/usecases/initialize_webrtc_usecase.dart';
 import '../../domain/usecases/remove_data_channel_usecase.dart';
 import '../../domain/usecases/send_webrtc_data_usecase.dart';
 import '../../domain/usecases/set_remote_answer_usecase.dart';
-import '../../domain/repositories/webrtc_repository.dart';
-import '../../domain/services/connection_recovery_strategy.dart';
 import '../state/webrtc_state.dart';
 
-/// Orchestrates WebRTC lifecycle, negotiation, and recovery.
-///
-/// Follows Clean Architecture:
-/// - Delegates transport concerns to WebRtcRepository
-/// - Delegates recovery strategy to IConnectionRecoveryStrategy
-/// - Delegates internet monitoring to IOnlineAwareResilience
-///
-/// Single Responsibility: Orchestrate WebRTC operations and manage state.
-///
-/// SOLID Principles Applied:
-/// - SRP: Only handles state and orchestration, not retry/recovery details
-/// - OCP: Recovery behavior can be swapped via IConnectionRecoveryStrategy
-/// - LSP: Dependencies are interfaces, not concrete implementations
-/// - ISP: Services expose only needed methods
-/// - DIP: Depends on abstractions, not concrete services
 class WebRtcController {
-  final WebRtcRepository repository;
+  final WebRtcSessionManager sessionManager;
   final InitializeWebRtcUseCase initializeWebRtcUseCase;
   final CreateWebRtcOfferUseCase createWebRtcOfferUseCase;
   final CreateWebRtcAnswerUseCase createWebRtcAnswerUseCase;
@@ -54,13 +39,13 @@ class WebRtcController {
   final ConnectionStateUseCase connectionStateUseCase;
   final IOnlineAwareResilience onlineAwareness;
 
-  WebRtcState _state = const WebRtcState();
-  StreamSubscription<WebRtcConnectionState>? _connectionStateSubscription;
-  bool _closingInProgress = false;
-  final _stateController = StreamController<WebRtcState>.broadcast();
+  final Map<String, WebRtcState> _states = {};
+  final Map<String, StreamSubscription<WebRtcConnectionState>> _connectionSubs = {};
+  final Set<String> _closingSessions = {};
+  final _stateController = StreamController<Map<String, WebRtcState>>.broadcast();
 
   WebRtcController({
-    required this.repository,
+    required this.sessionManager,
     required this.initializeWebRtcUseCase,
     required this.createWebRtcOfferUseCase,
     required this.createWebRtcAnswerUseCase,
@@ -75,22 +60,45 @@ class WebRtcController {
     required this.connectionStateUseCase,
   });
 
-  WebRtcState get state => _state;
-  Stream<WebRtcState> get webRtcStates => _stateController.stream;
-  Stream<WebRtcIceCandidate> get localIceCandidates =>
-      repository.localIceCandidates;
-  Stream<WebRtcIceRoute> get iceRoutes => repository.iceRoutes;
-  WebRtcIceRoute get iceRoute => repository.iceRoute;
+  Map<String, WebRtcState> get states => Map.unmodifiable(_states);
+  Stream<Map<String, WebRtcState>> get webRtcStates => _stateController.stream;
+
+  WebRtcState stateOf(String sessionId) {
+    return _states[sessionId] ?? const WebRtcState();
+  }
+
+  Stream<WebRtcIceCandidate> localIceCandidates(String sessionId) {
+    return sessionManager.getOrCreate(sessionId).localIceCandidates;
+  }
+
+  Stream<WebRtcIceRoute> iceRoutes(String sessionId) {
+    return sessionManager.getOrCreate(sessionId).iceRoutes;
+  }
+
+  WebRtcIceRoute iceRouteOf(String sessionId) {
+    return sessionManager.getOrCreate(sessionId).iceRoute;
+  }
+
+  Stream<WebRtcDataMessage> receivedDataMessages(String sessionId) {
+    return sessionManager.getOrCreate(sessionId).dataMessages;
+  }
+
+  Stream<WebRtcConnectionState> connectionStates(String sessionId) {
+    return connectionStateUseCase(sessionId: sessionId);
+  }
 
   Future<void> initialize({
+    required String sessionId,
     required List<String> dataChannels,
     List<WebRtcIceServerConfig>? iceServers,
   }) async {
     infoLog(
-      'WebRTC controller initialize requested channels=${dataChannels.length}.',
+      'WebRTC initialize requested. sessionId=$sessionId channels=${dataChannels.length}',
     );
+
     _emitState(
-      _state.copyWith(
+      sessionId,
+      stateOf(sessionId).copyWith(
         status: WebRtcStatus.initializing,
         clearError: true,
         clearMessage: true,
@@ -100,168 +108,218 @@ class WebRtcController {
 
     try {
       await initializeWebRtcUseCase(
+        sessionId: sessionId,
         dataChannelLabels: dataChannels,
         iceServers: iceServers,
       );
-      await _bindObservers();
+
+      await _bindObservers(sessionId);
+
       _emitState(
-        _state.copyWith(
+        sessionId,
+        stateOf(sessionId).copyWith(
           status: WebRtcStatus.negotiating,
           message: 'Peer connection initialized.',
         ),
       );
-      infoLog('WebRTC peer initialized and observers bound.');
+
+      infoLog('WebRTC initialized. sessionId=$sessionId');
     } catch (error) {
       _emitState(
-        _state.copyWith(
+        sessionId,
+        stateOf(sessionId).copyWith(
           status: WebRtcStatus.failed,
           error: _toAppError(error).message,
         ),
       );
-      errorLog('WebRTC initialization failed.', error);
+      errorLog('WebRTC initialization failed. sessionId=$sessionId', error);
       rethrow;
     }
   }
 
   Future<WebRtcSessionDescription> createOffer({
+    required String sessionId,
     bool iceRestart = false,
   }) async {
     try {
-      debugLog('WebRTC createOffer called. iceRestart=$iceRestart.');
       _emitState(
-        _state.copyWith(
+        sessionId,
+        stateOf(sessionId).copyWith(
           status: WebRtcStatus.negotiating,
           message: iceRestart ? 'Restarting ICE...' : 'Creating offer...',
           clearError: true,
         ),
       );
-      return await createWebRtcOfferUseCase(iceRestart: iceRestart);
+
+      return await createWebRtcOfferUseCase(
+        sessionId: sessionId,
+        iceRestart: iceRestart,
+      );
     } catch (error) {
       _emitState(
-        _state.copyWith(
+        sessionId,
+        stateOf(sessionId).copyWith(
           status: WebRtcStatus.failed,
           error: _toAppError(error).message,
         ),
       );
-      errorLog('WebRTC createOffer failed.', error);
+      errorLog('WebRTC createOffer failed. sessionId=$sessionId', error);
       rethrow;
     }
   }
 
-  Future<WebRtcSessionDescription> createAnswerForOffer(
-    WebRtcSessionDescription offer,
-  ) async {
+  Future<WebRtcSessionDescription> createAnswerForOffer({
+    required String sessionId,
+    required WebRtcSessionDescription offer,
+  }) async {
     try {
-      debugLog('WebRTC createAnswerForOffer called for type=${offer.type}.');
       _emitState(
-        _state.copyWith(
+        sessionId,
+        stateOf(sessionId).copyWith(
           status: WebRtcStatus.negotiating,
           message: 'Creating answer...',
           clearError: true,
         ),
       );
-      return await createWebRtcAnswerUseCase(offer);
+
+      return await createWebRtcAnswerUseCase(
+        sessionId: sessionId,
+        offer: offer,
+      );
     } catch (error) {
       _emitState(
-        _state.copyWith(
+        sessionId,
+        stateOf(sessionId).copyWith(
           status: WebRtcStatus.failed,
           error: _toAppError(error).message,
         ),
       );
-      errorLog('WebRTC createAnswerForOffer failed.', error);
+      errorLog('WebRTC createAnswer failed. sessionId=$sessionId', error);
       rethrow;
     }
   }
 
-  Future<void> setRemoteAnswer(WebRtcSessionDescription answer) async {
-    debugLog('Setting remote WebRTC answer type=${answer.type}.');
-    await setRemoteAnswerUseCase(answer);
+  Future<void> setRemoteAnswer({
+    required String sessionId,
+    required WebRtcSessionDescription answer,
+  }) {
+    return setRemoteAnswerUseCase(
+      sessionId: sessionId,
+      answer: answer,
+    );
   }
 
-  Future<void> addRemoteIceCandidate(WebRtcIceCandidate candidate) {
-    return addRemoteIceCandidateUseCase(candidate);
+  Future<void> addRemoteIceCandidate({
+    required String sessionId,
+    required WebRtcIceCandidate candidate,
+  }) {
+    return addRemoteIceCandidateUseCase(
+      sessionId: sessionId,
+      candidate: candidate,
+    );
   }
 
-  Future<void> addDataChannel(String label) {
-    return addDataChannelUseCase(label);
+  Future<void> addDataChannel({
+    required String sessionId,
+    required String label,
+  }) {
+    return addDataChannelUseCase(
+      sessionId: sessionId,
+      label: label,
+    );
   }
 
-  Future<void> removeDataChannel(String label) {
-    return removeDataChannelUseCase(label);
+  Future<void> removeDataChannel({
+    required String sessionId,
+    required String label,
+  }) {
+    return removeDataChannelUseCase(
+      sessionId: sessionId,
+      label: label,
+    );
   }
 
-  Stream<WebRtcConnectionState> get connectionStates =>
-      connectionStateUseCase();
-  Stream<WebRtcDataMessage> get receivedDataMessages => repository.dataMessages;
   Future<void> sendData({
+    required String sessionId,
     required String channelLabel,
     required String message,
   }) {
-    return sendWebRtcDataUseCase(channelLabel: channelLabel, message: message);
+    return sendWebRtcDataUseCase(
+      sessionId: sessionId,
+      channelLabel: channelLabel,
+      message: message,
+    );
   }
 
-  Future<WebRtcIceRoute> refreshIceRoute() {
-    return repository.refreshIceRoute();
+  Future<WebRtcIceRoute> refreshIceRoute(String sessionId) {
+    return sessionManager.getOrCreate(sessionId).refreshIceRoute();
   }
 
-  Future<void> close() async {
-    infoLog('WebRTC controller close requested.');
-    _closingInProgress = true;
+  Future<void> close(String sessionId) async {
+    infoLog('WebRTC close requested. sessionId=$sessionId');
+    _closingSessions.add(sessionId);
+
     try {
-      await onlineAwareness.stopMonitoring();
-      await _connectionStateSubscription?.cancel();
-      _connectionStateSubscription = null;
-      await closeWebRtcUseCase();
+      await _connectionSubs.remove(sessionId)?.cancel();
+
+      await closeWebRtcUseCase(sessionId: sessionId);
 
       _emitState(
-        _state.copyWith(
+        sessionId,
+        stateOf(sessionId).copyWith(
           status: WebRtcStatus.closed,
           message: 'WebRTC closed.',
           clearError: true,
         ),
       );
-      infoLog('WebRTC controller closed.');
+
+      await sessionManager.closeSession(sessionId);
+      _states.remove(sessionId);
+      _pushAllStates();
     } finally {
-      _closingInProgress = false;
+      _closingSessions.remove(sessionId);
     }
   }
 
   Future<void> dispose() async {
-    await close();
+    for (final sub in _connectionSubs.values) {
+      await sub.cancel();
+    }
+    _connectionSubs.clear();
+
+    await onlineAwareness.stopMonitoring();
+    await sessionManager.closeAll();
+    _states.clear();
+
     await _stateController.close();
   }
 
-  // PRIVATE METHODS
+  Future<void> _bindObservers(String sessionId) async {
+    await _connectionSubs.remove(sessionId)?.cancel();
 
-  Future<void> _bindObservers() async {
-    await _connectionStateSubscription?.cancel();
-    _connectionStateSubscription = repository.connectionStates.listen((
+    _connectionSubs[sessionId] = connectionStateUseCase(sessionId: sessionId).listen((
       connectionState,
     ) {
-      // Suppress recovery callbacks if intentional close is in progress
-      if (_closingInProgress) {
-        return;
-      }
-
-      debugLog('Observed WebRTC connection state=$connectionState.');
+      if (_closingSessions.contains(sessionId)) return;
 
       switch (connectionState) {
         case WebRtcConnectionState.connected:
           _emitState(
-            _state.copyWith(
+            sessionId,
+            stateOf(sessionId).copyWith(
               status: WebRtcStatus.connected,
               retryCount: 0,
               message: 'Connected.',
               clearError: true,
             ),
           );
-          infoLog('WebRTC connection established.');
           break;
+
         case WebRtcConnectionState.disconnected:
         case WebRtcConnectionState.failed:
-          warningLog('WebRTC connection degraded: state=$connectionState.');
           _emitState(
-            _state.copyWith(
+            sessionId,
+            stateOf(sessionId).copyWith(
               status: WebRtcStatus.retrying,
               message: connectionState == WebRtcConnectionState.failed
                   ? 'Connection failed. Attempting recovery...'
@@ -269,80 +327,78 @@ class WebRtcController {
               clearError: true,
             ),
           );
-          _triggerRecovery();
+          _triggerRecovery(sessionId: sessionId);
           break;
+
         case WebRtcConnectionState.closed:
-          _emitState(_state.copyWith(status: WebRtcStatus.closed));
-          infoLog('WebRTC connection closed.');
+          _emitState(
+            sessionId,
+            stateOf(sessionId).copyWith(status: WebRtcStatus.closed),
+          );
           break;
+
         case WebRtcConnectionState.newState:
         case WebRtcConnectionState.connecting:
           break;
       }
     });
 
-    // Monitor internet status for network-level recovery
     await onlineAwareness.startMonitoring(
-      onRecoveryNeeded: _handleInternetRecovery,
-      shouldAutoRecover: () => !_closingInProgress,
+      onRecoveryNeeded: () => _handleInternetRecovery(sessionId),
+      shouldAutoRecover: () => !_closingSessions.contains(sessionId),
     );
   }
 
-  Future<void> _handleInternetRecovery() async {
-    if (_closingInProgress || recoveryStrategy.isRecovering) {
-      debugLog(
-        'Ignoring internet recovery callback; close/recovery already in progress.',
-      );
+  Future<void> _handleInternetRecovery(String sessionId) async {
+    if (_closingSessions.contains(sessionId) || recoveryStrategy.isRecovering) {
       return;
     }
 
     _emitState(
-      _state.copyWith(
+      sessionId,
+      stateOf(sessionId).copyWith(
         status: WebRtcStatus.retrying,
         message: 'Internet recovered. Attempting recovery...',
       ),
     );
 
     try {
-      infoLog('Internet recovered, triggering WebRTC recovery.');
-      await _triggerRecovery();
-    } catch (_) {
-      // State already updated by recovery strategy
-    }
+      await _triggerRecovery(sessionId: sessionId);
+    } catch (_) {}
   }
 
-  Future<void> _triggerRecovery() async {
-    if (_closingInProgress || recoveryStrategy.isRecovering) {
-      debugLog('Skipping recovery trigger; already closing or recovering.');
+  Future<void> _triggerRecovery({required String sessionId}) async {
+    if (_closingSessions.contains(sessionId) || recoveryStrategy.isRecovering) {
       return;
     }
 
     try {
-      infoLog('Starting WebRTC recovery attempt.');
-      await recoveryStrategy.recover();
-      infoLog('WebRTC recovery attempt finished.');
+      await recoveryStrategy.recover(sessionId: sessionId);
     } catch (error) {
       _emitState(
-        _state.copyWith(
+        sessionId,
+        stateOf(sessionId).copyWith(
           status: WebRtcStatus.failed,
           error: _toAppError(error).message,
         ),
       );
-      errorLog('WebRTC recovery failed.', error);
+      errorLog('Recovery failed. sessionId=$sessionId', error);
     }
   }
 
-  void _emitState(WebRtcState next) {
-    _state = next;
+  void _emitState(String sessionId, WebRtcState next) {
+    _states[sessionId] = next;
+    _pushAllStates();
+  }
+
+  void _pushAllStates() {
     if (!_stateController.isClosed) {
-      _stateController.add(_state);
+      _stateController.add(Map.unmodifiable(_states));
     }
   }
 
   AppException _toAppError(Object error) {
-    if (error is AppException) {
-      return error;
-    }
+    if (error is AppException) return error;
     if (error is StateError) {
       return ServerException(message: error.message);
     }

@@ -1,12 +1,13 @@
+import 'package:scommconnector/features/webrtc/application/webrtc_manager.dart';
 import '../entities/webrtc_ice_candidate.dart';
-import '../repositories/webrtc_repository.dart';
 
 class AddRemoteIceCandidateUseCase {
-  final WebRtcRepository repository;
+  final WebRtcSessionManager manager;
 
-  const AddRemoteIceCandidateUseCase(this.repository);
+  const AddRemoteIceCandidateUseCase(this.manager);
 
-  Future<void> call(WebRtcIceCandidate candidate) {
+  Future<void> call({required String sessionId, required WebRtcIceCandidate candidate}) {
+    final repository = manager.getOrCreate(sessionId);
     return repository.addRemoteIceCandidate(candidate);
   }
 }

@@ -72,12 +72,6 @@ class IdentityRepositoryImpl implements IdentityRepository {
   }
 
   @override
-  Future<List<IdentityDevice>> listUserDevices({required String userId}) async {
-    final response = await remoteDataSource.listUserDevices(userId: userId);
-    return response.map((device) => device.toEntity()).toList(growable: false);
-  }
-
-  @override
   Future<DeviceService> registerService({
     required String deviceId,
     required String serviceName,

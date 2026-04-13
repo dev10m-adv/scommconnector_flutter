@@ -1,6 +1,5 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
-import 'package:scommconnector/core/config/webrtc_config.dart';
 import 'package:scommconnector/core/di/feature/auth_di.dart';
 import 'package:scommconnector/core/di/feature/connect_di.dart';
 import 'package:scommconnector/core/di/feature/identity_id.dart';
@@ -16,8 +15,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 final scommDi = GetIt.instance;
 
 Future<void> setupDependencies({
-  String host = ScommConfig.grocHost,
-  int port = ScommConfig.grocPort,
+  required String host,
+  required int port,
   bool useTls = false,
 }) async {
 

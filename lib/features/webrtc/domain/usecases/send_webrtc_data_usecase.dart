@@ -1,11 +1,12 @@
-import '../repositories/webrtc_repository.dart';
+import 'package:scommconnector/features/webrtc/application/webrtc_manager.dart';
 
 class SendWebRtcDataUseCase {
-  final WebRtcRepository repository;
+  final WebRtcSessionManager manager;
 
-  const SendWebRtcDataUseCase(this.repository);
+  const SendWebRtcDataUseCase(this.manager);
 
-  Future<void> call({required String channelLabel, required String message}) {
+  Future<void> call({required String sessionId, required String channelLabel, required String message}) {
+    final repository = manager.getOrCreate(sessionId);
     return repository.sendData(channelLabel: channelLabel, message: message);
   }
 }

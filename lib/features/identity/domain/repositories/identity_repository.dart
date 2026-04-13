@@ -23,8 +23,6 @@ abstract class IdentityRepository {
 
   Future<List<IdentityDevice>> listMyDevices();
 
-  Future<List<IdentityDevice>> listUserDevices({required String userId});
-
   Future<DeviceService> registerService({
     required String deviceId,
     required String serviceName,

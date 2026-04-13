@@ -6,6 +6,6 @@ class RemoveLastUserUsecase {
   RemoveLastUserUsecase(this.repository);
 
   Future<void> call() {
-    return repository.removeLastUsedUserId();
+    return repository.removeLastUserEmail();
   }
 }

@@ -12,7 +12,6 @@ export 'domain/usecases/delete_device_usecase.dart';
 export 'domain/usecases/delete_service_usecase.dart';
 export 'domain/usecases/list_device_services_usecase.dart';
 export 'domain/usecases/list_my_devices_usecase.dart';
-export 'domain/usecases/list_user_devices_usecase.dart';
 export 'domain/usecases/params/params.dart';
 export 'domain/usecases/register_device_usecase.dart';
 export 'domain/usecases/register_service_usecase.dart';

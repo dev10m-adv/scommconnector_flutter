@@ -1,4 +1,5 @@
 enum WebRtcStatus {
+  initial,
   idle,
   initializing,
   negotiating,
@@ -15,7 +16,7 @@ class WebRtcState {
   final String? error;
 
   const WebRtcState({
-    this.status = WebRtcStatus.idle,
+    this.status = WebRtcStatus.initial,
     this.retryCount = 0,
     this.message,
     this.error,

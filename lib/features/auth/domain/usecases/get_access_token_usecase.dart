@@ -5,7 +5,7 @@ class GetAccessTokenUseCase {
 
   const GetAccessTokenUseCase(this.repository);
 
-  Future<String?> call(String userId) {
-    return repository.getStoredAccessToken(userId: userId);
+  Future<String?> call(String email) {
+    return repository.getStoredAccessToken(email: email);
   }
 }

@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'package:scommconnector/core/logging/log.dart';
+
+//// [TODO:] If Needed to care about internet connectivity {COMPLETE THIS}
 /// Callback when recovery is triggered (e.g., internet status changed).
 typedef OnRecoveryNeeded = Future<void> Function();
 
@@ -42,6 +45,8 @@ class OnlineAwareResilience implements IOnlineAwareResilience {
   Future<void> stopMonitoring() async {
     _onRecoveryNeeded = null;
     _shouldAutoRecover = null;
+    infoLog("_onRecoverNeeded : $_onRecoveryNeeded, _shouldAutoRecover: $_shouldAutoRecover");
+    _handleStatusChange();
   }
 
   @override

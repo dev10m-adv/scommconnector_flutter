@@ -1,13 +1,19 @@
 import '../entities/signaling_entities.dart';
 
 abstract class SignalingRepository {
-  Stream<SignalingEnvelope> connect({required String deviceId});
+    Stream<SignalingEnvelope> get messages;
 
-  Future<void> sendEnvelope(SignalEnvelope envelope);
+  Stream<SignalingConnectionStatus> get connectionStatus;
+
+  Future<void> connect({required String deviceId});
+
+  Future<void> sendEnvelope(SignalingEnvelope envelope);
 
   Stream<SignalingPresenceEvent> watchPresence({
     required List<String> targetUris,
   });
 
   Future<void> disconnect();
+
+  Future<void> dispose();
 }
