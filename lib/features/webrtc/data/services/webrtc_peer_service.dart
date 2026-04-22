@@ -113,9 +113,7 @@ class WebRtcPeerService {
   ) async {
     final pc = _requirePeerConnection();
 
-    await pc.setRemoteDescription(
-      RTCSessionDescription(offer.sdp, offer.type),
-    );
+    await pc.setRemoteDescription(RTCSessionDescription(offer.sdp, offer.type));
     await _flushPendingRemoteIceCandidates(pc);
 
     final answer = await pc.createAnswer();
@@ -179,7 +177,11 @@ class WebRtcPeerService {
   }) async {
     final channel = _dataChannels[channelLabel];
     if (channel == null) {
-      throw StateError('Data channel "$channelLabel" does not exist.');
+      final available = _dataChannels.keys.join(', ');
+      throw StateError(
+        'Data channel "$channelLabel" does not exist. '
+        'Available channels: [${available.isEmpty ? 'none' : available}]',
+      );
     }
 
     await channel.send(RTCDataChannelMessage(message));

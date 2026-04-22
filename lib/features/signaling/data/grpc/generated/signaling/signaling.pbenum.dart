@@ -26,6 +26,8 @@ class ConnectionResponseStatus extends $pb.ProtobufEnum {
       ConnectionResponseStatus._(3, _omitEnumNames ? '' : 'BUSY');
   static const ConnectionResponseStatus BLOCKED =
       ConnectionResponseStatus._(4, _omitEnumNames ? '' : 'BLOCKED');
+  static const ConnectionResponseStatus DISCONNECTED =
+      ConnectionResponseStatus._(5, _omitEnumNames ? '' : 'DISCONNECTED');
 
   static const $core.List<ConnectionResponseStatus> values =
       <ConnectionResponseStatus>[
@@ -34,10 +36,11 @@ class ConnectionResponseStatus extends $pb.ProtobufEnum {
     REJECTED,
     BUSY,
     BLOCKED,
+    DISCONNECTED,
   ];
 
   static final $core.List<ConnectionResponseStatus?> _byValue =
-      $pb.ProtobufEnum.$_initByValueList(values, 4);
+      $pb.ProtobufEnum.$_initByValueList(values, 5);
   static ConnectionResponseStatus? valueOf($core.int value) =>
       value < 0 || value >= _byValue.length ? null : _byValue[value];
 

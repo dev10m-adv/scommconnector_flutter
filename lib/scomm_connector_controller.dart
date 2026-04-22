@@ -103,44 +103,48 @@ class ScommConnectorController {
     _sessionStateController.add(next);
   }
 
-void _syncSessionState() {
-  final auth = _authController.state;
-  final identity = _identityController.state;
-  final signaling = _connectController.signalingController.state;
-  final webrtc = webrtcState;
+  void _syncSessionState() {
+    final auth = _authController.state;
+    final identity = _identityController.state;
+    final signaling = _connectController.signalingController.state;
+    final webrtc = webrtcState;
 
-  final connectedRemoteUris = _connectController.sessionStore.all
-      .where((session) {
-        final status = _webrtccontroller.stateOf(session.sessionId).status;
-        return status == WebRtcStatus.connected ||
-            status == WebRtcStatus.negotiating ||
-            status == WebRtcStatus.retrying;
-      })
-      .map((session) => session.remoteUri)
-      .where((uri) => uri.trim().isNotEmpty)
-      .toSet()
-      .toList(growable: false)
-    ..sort();
+    final connectedRemoteUris =
+        _connectController.sessionStore.all
+            .where((session) {
+              final status = _webrtccontroller
+                  .stateOf(session.sessionId)
+                  .status;
+              return status == WebRtcStatus.connected ||
+                  status == WebRtcStatus.negotiating ||
+                  status == WebRtcStatus.retrying;
+            })
+            .map((session) => session.remoteUri)
+            .where((uri) => uri.trim().isNotEmpty)
+            .toSet()
+            .toList(growable: false)
+          ..sort();
 
-  final selectedRemoteUri = _connectController.selectedSession?.remoteUri;
-  final activeRemoteUri = selectedRemoteUri != null &&
-          connectedRemoteUris.contains(selectedRemoteUri)
-      ? selectedRemoteUri
-      : (connectedRemoteUris.isNotEmpty ? connectedRemoteUris.first : null);
+    final selectedRemoteUri = _connectController.selectedSession?.remoteUri;
+    final activeRemoteUri =
+        selectedRemoteUri != null &&
+            connectedRemoteUris.contains(selectedRemoteUri)
+        ? selectedRemoteUri
+        : (connectedRemoteUris.isNotEmpty ? connectedRemoteUris.first : null);
 
-  _emitSession(
-    ScommSessionState(
-      isAuthenticated: auth.isLoggedIn,
-      isDeviceRegistered: identity.isRegistered,
-      authState: auth,
-      identityState: identity,
-      signalingState: signaling,
-      webRtcState: webrtc,
-      activeRemoteUri: activeRemoteUri,
-      connectedRemoteUris: connectedRemoteUris,
-    ),
-  );
-}
+    _emitSession(
+      ScommSessionState(
+        isAuthenticated: auth.isLoggedIn,
+        isDeviceRegistered: identity.isRegistered,
+        authState: auth,
+        identityState: identity,
+        signalingState: signaling,
+        webRtcState: webrtc,
+        activeRemoteUri: activeRemoteUri,
+        connectedRemoteUris: connectedRemoteUris,
+      ),
+    );
+  }
 
   ///////// Authentication methods ///////////
 
@@ -359,9 +363,15 @@ void _syncSessionState() {
 
     for (final activeSessionId in activeSessionIds) {
       if (_dataMessageSubscriptions.containsKey(activeSessionId)) {
+        print(
+          '[SCOMM-BIND] Session $activeSessionId already subscribed, skipping',
+        );
         continue;
       }
 
+      print(
+        '[SCOMM-BIND] Subscribing to data messages for session $activeSessionId',
+      );
       _dataMessageSubscriptions[activeSessionId] = _webrtccontroller
           .receivedDataMessages(activeSessionId)
           .listen((message) async {
@@ -369,6 +379,17 @@ void _syncSessionState() {
               return;
             }
             _recordReceivedPayload(message.message);
+
+            // Record request routing before broadcasting to listeners to avoid
+            // races where handlers send responses immediately.
+            final earlyParsed = _datachannelController.transport.parse(
+              message.message,
+            );
+            final earlyRequestId = earlyParsed?.requestId?.trim();
+            if (earlyRequestId != null && earlyRequestId.isNotEmpty) {
+              _requestSessionByRequestId[earlyRequestId] = activeSessionId;
+            }
+
             final parsed = await _datachannelController.receiveRawMessage(
               message.message,
             );
@@ -557,9 +578,19 @@ void _syncSessionState() {
     );
   }
 
-  Future<ScommRemoteMessage?> receiveRawDatachannelMessage(String rawMessage) {
-    return _datachannelController.receiveRawMessage(rawMessage);
-  }
+  // Future<ScommRemoteMessage?> receiveRawDatachannelMessage(String rawMessage) {
+  //   final words = rawMessage.split(' ');
+
+  //   const int previewCount = 3; // number of words to show
+
+  //   final startWords = words.take(previewCount).join(' ');
+  //   final endWords = words.length > previewCount
+  //       ? words.skip(words.length - previewCount).join(' ')
+  //       : '';
+
+  //   print('Received message preview: $startWords ... $endWords');
+  //   return _datachannelController.receiveRawMessage(rawMessage);
+  // }
 
   ///// Is DataChannel open
   Stream<bool> get isDataChannelOpen {
@@ -640,13 +671,15 @@ void _syncSessionState() {
     required String serviceName,
     String note = '',
     Duration timeout = const Duration(seconds: 12),
-  }) {
-    return _connectController.initiateConnection(
+  }) async {
+    await _connectController.initiateConnection(
       toUri: toUri,
       serviceName: serviceName,
       note: note,
       timeout: timeout,
     );
+
+    await bindSelectedSessionStreams();
   }
 
   Future<void> setRemoteAnswer(WebRtcSessionDescription answer) {
@@ -718,14 +751,44 @@ void _syncSessionState() {
     required String requestId,
     required ScommRemoteMessage message,
   }) async {
-    final sessionId = _requestSessionByRequestId[requestId.trim()];
-    if (sessionId == null || sessionId.isEmpty) {
+    final normalizedRequestId = requestId.trim();
+    final mappedSessionId = _requestSessionByRequestId[normalizedRequestId];
+    print(
+      '[SCOMM-ROUTE] Sending type=${message.type.name} action=${message.action} requestId=$normalizedRequestId → mappedSession=$mappedSessionId | allMappings=${_requestSessionByRequestId.length}',
+    );
+    if (mappedSessionId != null && mappedSessionId.isNotEmpty) {
+      print('[SCOMM-ROUTE] ✓ Using mapped session $mappedSessionId');
+      _recordSentPayload(message.encode());
+      await _webrtccontroller.sendData(
+        sessionId: mappedSessionId,
+        channelLabel: ScommDataChannelTransport.mainChannel,
+        message: message.encode(),
+      );
+      return;
+    }
+
+    final selectedSessionId = _connectController.selectedSessionId;
+    final sessionIds = _connectController.sessionStore.sessionIds;
+    final singleActiveSessionId = sessionIds.length == 1
+        ? sessionIds.first
+        : null;
+    final fallbackSessionId = selectedSessionId ?? singleActiveSessionId;
+
+    print(
+      '[SCOMM-ROUTE] No mapping found → selectedSession=$selectedSessionId singleActive=$singleActiveSessionId fallback=$fallbackSessionId allSessions=${sessionIds.toList()}',
+    );
+
+    if (fallbackSessionId == null || fallbackSessionId.isEmpty) {
+      print(
+        '[SCOMM-ROUTE] ⚠ No session available, falling back to transport.send',
+      );
       return _datachannelController.transport.send(message);
     }
 
+    print('[SCOMM-ROUTE] ✓ Using fallback session $fallbackSessionId');
     _recordSentPayload(message.encode());
     await _webrtccontroller.sendData(
-      sessionId: sessionId,
+      sessionId: fallbackSessionId,
       channelLabel: ScommDataChannelTransport.mainChannel,
       message: message.encode(),
     );

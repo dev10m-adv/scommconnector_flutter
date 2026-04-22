@@ -423,6 +423,8 @@ class SignalingServiceGrpcClientImpl implements SignalingServiceGrpcClient {
         return signaling_pb.ConnectionResponseStatus.BUSY;
       case SignalingConnectionResponseStatus.blocked:
         return signaling_pb.ConnectionResponseStatus.BLOCKED;
+      case SignalingConnectionResponseStatus.disconnected:
+        return signaling_pb.ConnectionResponseStatus.DISCONNECTED;
       case SignalingConnectionResponseStatus.unspecified:
         return signaling_pb
             .ConnectionResponseStatus
@@ -442,6 +444,8 @@ class SignalingServiceGrpcClientImpl implements SignalingServiceGrpcClient {
         return SignalingConnectionResponseStatus.busy;
       case signaling_pb.ConnectionResponseStatus.BLOCKED:
         return SignalingConnectionResponseStatus.blocked;
+      case signaling_pb.ConnectionResponseStatus.DISCONNECTED:
+        return SignalingConnectionResponseStatus.disconnected;
       case signaling_pb
           .ConnectionResponseStatus
           .CONNECTION_RESPONSE_STATUS_UNSPECIFIED:

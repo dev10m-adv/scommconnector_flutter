@@ -40,9 +40,19 @@ class WebRtcController {
   final IOnlineAwareResilience onlineAwareness;
 
   final Map<String, WebRtcState> _states = {};
-  final Map<String, StreamSubscription<WebRtcConnectionState>> _connectionSubs = {};
+  final Map<String, StreamSubscription<WebRtcConnectionState>> _connectionSubs =
+      {};
   final Set<String> _closingSessions = {};
-  final _stateController = StreamController<Map<String, WebRtcState>>.broadcast();
+
+  /// Sessions where the remote peer sent an intentional disconnect signal.
+  /// Recovery is suppressed for these sessions.
+  final Set<String> _remoteClosedSessions = {};
+  final Map<String, int> _recoveryAttemptCounts = {};
+  static const int _maxRecoveryAttempts = 3;
+  final _stateController =
+      StreamController<Map<String, WebRtcState>>.broadcast();
+  final _recoveryOfferController =
+      StreamController<MapEntry<String, WebRtcSessionDescription>>.broadcast();
 
   WebRtcController({
     required this.sessionManager,
@@ -63,9 +73,28 @@ class WebRtcController {
   Map<String, WebRtcState> get states => Map.unmodifiable(_states);
   Stream<Map<String, WebRtcState>> get webRtcStates => _stateController.stream;
 
+  /// Emits a [MapEntry] of (sessionId → new offer SDP) whenever a recovery
+  /// ICE-restart offer is ready to be forwarded to the remote peer.
+  Stream<MapEntry<String, WebRtcSessionDescription>> get recoveryOfferStream =>
+      _recoveryOfferController.stream;
+
   WebRtcState stateOf(String sessionId) {
     return _states[sessionId] ?? const WebRtcState();
   }
+
+  /// Called by [ConnectController] when the remote peer sends an intentional
+  /// disconnect signal via signaling.  Recovery is suppressed for this session.
+  void markRemoteClosed(String sessionId) {
+    _remoteClosedSessions.add(sessionId);
+    infoLog(
+      'Session marked as remote-closed; recovery suppressed. sessionId=$sessionId',
+    );
+  }
+
+  /// Returns true if the remote peer deliberately closed this session.
+  /// Used by [ConnectController] to skip sending a disconnect echo.
+  bool isRemoteClosed(String sessionId) =>
+      _remoteClosedSessions.contains(sessionId);
 
   Stream<WebRtcIceCandidate> localIceCandidates(String sessionId) {
     return sessionManager.getOrCreate(sessionId).localIceCandidates;
@@ -203,10 +232,7 @@ class WebRtcController {
     required String sessionId,
     required WebRtcSessionDescription answer,
   }) {
-    return setRemoteAnswerUseCase(
-      sessionId: sessionId,
-      answer: answer,
-    );
+    return setRemoteAnswerUseCase(sessionId: sessionId, answer: answer);
   }
 
   Future<void> addRemoteIceCandidate({
@@ -223,20 +249,14 @@ class WebRtcController {
     required String sessionId,
     required String label,
   }) {
-    return addDataChannelUseCase(
-      sessionId: sessionId,
-      label: label,
-    );
+    return addDataChannelUseCase(sessionId: sessionId, label: label);
   }
 
   Future<void> removeDataChannel({
     required String sessionId,
     required String label,
   }) {
-    return removeDataChannelUseCase(
-      sessionId: sessionId,
-      label: label,
-    );
+    return removeDataChannelUseCase(sessionId: sessionId, label: label);
   }
 
   Future<void> sendData({
@@ -258,6 +278,8 @@ class WebRtcController {
   Future<void> close(String sessionId) async {
     infoLog('WebRTC close requested. sessionId=$sessionId');
     _closingSessions.add(sessionId);
+    _recoveryAttemptCounts.remove(sessionId);
+    _remoteClosedSessions.remove(sessionId);
 
     try {
       await _connectionSubs.remove(sessionId)?.cancel();
@@ -286,62 +308,76 @@ class WebRtcController {
       await sub.cancel();
     }
     _connectionSubs.clear();
+    _recoveryAttemptCounts.clear();
+    _remoteClosedSessions.clear();
 
     await onlineAwareness.stopMonitoring();
     await sessionManager.closeAll();
     _states.clear();
 
     await _stateController.close();
+    if (!_recoveryOfferController.isClosed) {
+      await _recoveryOfferController.close();
+    }
   }
 
   Future<void> _bindObservers(String sessionId) async {
     await _connectionSubs.remove(sessionId)?.cancel();
 
-    _connectionSubs[sessionId] = connectionStateUseCase(sessionId: sessionId).listen((
-      connectionState,
-    ) {
-      if (_closingSessions.contains(sessionId)) return;
+    _connectionSubs[sessionId] = connectionStateUseCase(sessionId: sessionId)
+        .listen((connectionState) {
+          if (_closingSessions.contains(sessionId)) return;
 
-      switch (connectionState) {
-        case WebRtcConnectionState.connected:
-          _emitState(
-            sessionId,
-            stateOf(sessionId).copyWith(
-              status: WebRtcStatus.connected,
-              retryCount: 0,
-              message: 'Connected.',
-              clearError: true,
-            ),
-          );
-          break;
+          switch (connectionState) {
+            case WebRtcConnectionState.connected:
+              _recoveryAttemptCounts.remove(sessionId);
+              _emitState(
+                sessionId,
+                stateOf(sessionId).copyWith(
+                  status: WebRtcStatus.connected,
+                  retryCount: 0,
+                  message: 'Connected.',
+                  clearError: true,
+                ),
+              );
+              break;
 
-        case WebRtcConnectionState.disconnected:
-        case WebRtcConnectionState.failed:
-          _emitState(
-            sessionId,
-            stateOf(sessionId).copyWith(
-              status: WebRtcStatus.retrying,
-              message: connectionState == WebRtcConnectionState.failed
-                  ? 'Connection failed. Attempting recovery...'
-                  : 'Connection lost. Attempting recovery...',
-              clearError: true,
-            ),
-          );
-          _triggerRecovery(sessionId: sessionId);
-          break;
+            case WebRtcConnectionState.disconnected:
+              _emitState(
+                sessionId,
+                stateOf(sessionId).copyWith(
+                  status: WebRtcStatus.closed,
+                  message: 'Connection lost. Removing stale session.',
+                  clearError: true,
+                ),
+              );
+              unawaited(close(sessionId));
+              break;
 
-        case WebRtcConnectionState.closed:
-          _emitState(
-            sessionId,
-            stateOf(sessionId).copyWith(status: WebRtcStatus.closed),
-          );
-          break;
+            case WebRtcConnectionState.failed:
+              _emitState(
+                sessionId,
+                stateOf(sessionId).copyWith(
+                  status: WebRtcStatus.retrying,
+                  message: 'Connection failed. Attempting recovery...',
+                  clearError: true,
+                ),
+              );
+              // _triggerRecovery(sessionId: sessionId);
+              break;
 
-        case WebRtcConnectionState.newState:
-        case WebRtcConnectionState.connecting:
-          break;
-      }
-    });
+            case WebRtcConnectionState.closed:
+              _emitState(
+                sessionId,
+                stateOf(sessionId).copyWith(status: WebRtcStatus.closed),
+              );
+              break;
+
+            case WebRtcConnectionState.newState:
+            case WebRtcConnectionState.connecting:
+              break;
+          }
+        });
 
     await onlineAwareness.startMonitoring(
       onRecoveryNeeded: () => _handleInternetRecovery(sessionId),
@@ -372,8 +408,44 @@ class WebRtcController {
       return;
     }
 
+    // Do not attempt recovery when the remote peer deliberately closed.
+    if (_remoteClosedSessions.contains(sessionId)) {
+      infoLog(
+        'Skipping recovery: remote peer closed the session. sessionId=$sessionId',
+      );
+      return;
+    }
+
+    // Track how many full recovery cycles this session has attempted.
+    // After the cap is reached the connection is considered unrecoverable.
+    final cycleCount = (_recoveryAttemptCounts[sessionId] ?? 0) + 1;
+    if (cycleCount > _maxRecoveryAttempts) {
+      _recoveryAttemptCounts.remove(sessionId);
+      _emitState(
+        sessionId,
+        stateOf(sessionId).copyWith(
+          status: WebRtcStatus.failed,
+          error:
+              'Connection is not recoverable after $_maxRecoveryAttempts attempts.',
+        ),
+      );
+      errorLog(
+        'Recovery exhausted, giving up. sessionId=$sessionId',
+        'max cycles=$_maxRecoveryAttempts',
+      );
+      await close(sessionId);
+      return;
+    }
+    _recoveryAttemptCounts[sessionId] = cycleCount;
+
     try {
-      await recoveryStrategy.recover(sessionId: sessionId);
+      final offer = await recoveryStrategy.recover(sessionId: sessionId);
+      // Forward the ICE-restart offer to ConnectController so it can be
+      // sent to the remote peer via signaling.  Without this the remote side
+      // never knows about the restart and recovery can never succeed.
+      if (!_recoveryOfferController.isClosed) {
+        _recoveryOfferController.add(MapEntry(sessionId, offer));
+      }
     } catch (error) {
       _emitState(
         sessionId,

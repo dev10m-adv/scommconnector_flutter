@@ -24,6 +24,7 @@ const ConnectionResponseStatus$json = {
     {'1': 'REJECTED', '2': 2},
     {'1': 'BUSY', '2': 3},
     {'1': 'BLOCKED', '2': 4},
+    {'1': 'DISCONNECTED', '2': 5},
   ],
 };
 

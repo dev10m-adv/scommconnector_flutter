@@ -23,6 +23,13 @@ class ConnectController {
   });
 
   StreamSubscription<SignalEnvelope>? _signalingSubscription;
+  StreamSubscription<MapEntry<String, WebRtcSessionDescription>>?
+  _recoveryOfferSubscription;
+
+  /// Sessions whose incoming offer is currently being processed (initialize →
+  /// answer → send).  A duplicate offer that arrives before the first completes
+  /// is dropped to prevent "PeerConnection is not initialized" race errors.
+  final Set<String> _processingOfferSessions = {};
   String? _localUri;
   String? _selectedSessionId;
   List<String> _configuredDataChannels = const [];
@@ -72,6 +79,17 @@ class ConnectController {
           print('Error handling signaling envelope: $error');
         },
       );
+
+      // Listen for ICE-restart offers produced by recovery so we can forward
+      // them to the remote peer via signaling.  Without this the remote side
+      // never knows about the restart and the connection can never recover.
+      await _recoveryOfferSubscription?.cancel();
+      _recoveryOfferSubscription = webRtcController.recoveryOfferStream.listen(
+        (entry) => _sendRecoveryOffer(sessionId: entry.key, offer: entry.value),
+        onError: (error) {
+          print('Error handling recovery offer: $error');
+        },
+      );
     } catch (error) {
       _isSignalingStart = false;
       await signalingController.stop();
@@ -83,19 +101,27 @@ class ConnectController {
     await _signalingSubscription?.cancel();
     _signalingSubscription = null;
 
+    await _recoveryOfferSubscription?.cancel();
+    _recoveryOfferSubscription = null;
+
     await signalingController.stop();
 
     _isSignalingStart = false;
   }
 
   Future<void> stopWebRtcSession(String sessionId) async {
-    await webRtcController.close(sessionId);
     final session = sessionStore.remove(sessionId);
-    await session?.dispose();
 
     if (_selectedSessionId == sessionId) {
       _selectedSessionId = null;
     }
+
+    // Notify the remote peer before tearing down so it does not attempt
+    // ICE restart / recovery on its side.
+    await _sendDisconnectNotice(sessionId);
+
+    await webRtcController.close(sessionId);
+    await session?.dispose();
   }
 
   Future<void> initiateConnection({
@@ -238,40 +264,54 @@ class ConnectController {
             break;
           }
 
-          sessionStore.save(
-            ConnectSession(
-              sessionId: sessionId,
-              requestId: requestId,
-              remoteUri: remoteUri,
-            ),
-          );
-          _selectedSessionId = sessionId;
-
-          if (webRtcController.stateOf(sessionId).status ==
-              WebRtcStatus.initial) {
-            await webRtcController.initialize(
-              sessionId: sessionId,
-              dataChannels: _configuredDataChannels,
-              iceServers: _configuredIceServers,
+          // Guard against concurrent offer processing for the same session.
+          // A duplicate offer that races the ongoing initialize → answer flow
+          // would hit "PeerConnection is not initialized" and must be dropped.
+          if (_processingOfferSessions.contains(sessionId)) {
+            print(
+              'Dropping duplicate offer: offer already in progress. sessionId=$sessionId',
             );
-            await _bindLocalIce(sessionId);
+            break;
           }
+          _processingOfferSessions.add(sessionId);
+          try {
+            sessionStore.save(
+              ConnectSession(
+                sessionId: sessionId,
+                requestId: requestId,
+                remoteUri: remoteUri,
+              ),
+            );
+            _selectedSessionId = sessionId;
 
-          final offer = WebRtcSessionDescription(
-            type: 'offer',
-            sdp: remoteOffer.sdp,
-          );
+            if (webRtcController.stateOf(sessionId).status ==
+                WebRtcStatus.initial) {
+              await webRtcController.initialize(
+                sessionId: sessionId,
+                dataChannels: _configuredDataChannels,
+                iceServers: _configuredIceServers,
+              );
+              await _bindLocalIce(sessionId);
+            }
 
-          final answer = await _createAnswerForIncomingOffer(
-            sessionId: sessionId,
-            offer: offer,
-          );
+            final offer = WebRtcSessionDescription(
+              type: 'offer',
+              sdp: remoteOffer.sdp,
+            );
 
-          await _sendAnswer(
-            answer: answer,
-            toUri: remoteUri,
-            requestId: requestId,
-          );
+            final answer = await _createAnswerForIncomingOffer(
+              sessionId: sessionId,
+              offer: offer,
+            );
+
+            await _sendAnswer(
+              answer: answer,
+              toUri: remoteUri,
+              requestId: requestId,
+            );
+          } finally {
+            _processingOfferSessions.remove(sessionId);
+          }
           break;
 
         case SignalingPayloadType.answer:
@@ -306,6 +346,16 @@ class ConnectController {
           break;
 
         case SignalingPayloadType.connectionResponse:
+          final response = envelope.connectionResponse;
+          if (response != null &&
+              response.status ==
+                  SignalingConnectionResponseStatus.disconnected) {
+            final sessionId = _sessionIdFromRequestId(response.requestId);
+            // Mark the session before closing so WebRtcController skips recovery.
+            webRtcController.markRemoteClosed(sessionId);
+            await stopWebRtcSession(sessionId);
+          }
+          break;
         case SignalingPayloadType.ping:
         case SignalingPayloadType.pong:
           break;
@@ -346,6 +396,14 @@ class ConnectController {
 
     if (localUri == null || session == null) return;
 
+    // Do not forward candidates when the session is permanently failed or
+    // closed — the remote peer would ignore them and it wastes signaling
+    // bandwidth.
+    final status = webRtcController.stateOf(sessionId).status;
+    if (status == WebRtcStatus.failed || status == WebRtcStatus.closed) {
+      return;
+    }
+
     await signalingController.sendEnvelope(
       SignalEnvelope(
         messageId: _buildRequestId(),
@@ -359,6 +417,68 @@ class ConnectController {
         ),
       ),
     );
+  }
+
+  /// Forward a recovery (ICE-restart) offer to the remote peer via signaling.
+  /// This is essential: without it the remote side never processes the restart
+  /// and the WebRTC connection can never recover.
+  Future<void> _sendRecoveryOffer({
+    required String sessionId,
+    required WebRtcSessionDescription offer,
+  }) async {
+    final session = sessionStore.getBySessionId(sessionId);
+    final localUri = _localUri;
+    if (session == null || localUri == null) return;
+
+    print(
+      'Forwarding recovery offer via signaling. sessionId=$sessionId requestId=${session.requestId}',
+    );
+
+    try {
+      await signalingController.sendEnvelope(
+        SignalEnvelope(
+          messageId: _buildRequestId(),
+          from: SignalingDeviceRef(uri: localUri),
+          to: SignalingDeviceRef(uri: session.remoteUri),
+          offer: SignalingOffer(requestId: session.requestId, sdp: offer.sdp),
+        ),
+      );
+    } catch (e) {
+      print('Failed to forward recovery offer: $e');
+    }
+  }
+
+  /// Notifies the remote peer that this side is intentionally closing the
+  /// session.  The remote side will receive a [connectionResponse] with
+  /// [SignalingConnectionResponseStatus.disconnected] and suppress recovery.
+  ///
+  /// Skipped when the remote already closed the session (they initiated the
+  /// disconnect) to avoid an unnecessary echo that could interfere with them
+  /// re-establishing a new connection.
+  Future<void> _sendDisconnectNotice(String sessionId) async {
+    // Remote already knows — don't echo back.
+    if (webRtcController.isRemoteClosed(sessionId)) return;
+
+    final session = sessionStore.getBySessionId(sessionId);
+    final localUri = _localUri;
+    if (session == null || localUri == null) return;
+
+    try {
+      await signalingController.sendEnvelope(
+        SignalEnvelope(
+          messageId: _buildRequestId(),
+          from: SignalingDeviceRef(uri: localUri),
+          to: SignalingDeviceRef(uri: session.remoteUri),
+          connectionResponse: SignalingConnectionResponse(
+            requestId: session.requestId,
+            status: SignalingConnectionResponseStatus.disconnected,
+          ),
+        ),
+      );
+    } catch (e) {
+      // Best-effort: if signaling is already down the remote will time out.
+      print('Failed to send disconnect notice: $e');
+    }
   }
 
   Future<void> _sendOffer({

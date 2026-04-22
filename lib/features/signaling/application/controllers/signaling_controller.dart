@@ -72,7 +72,6 @@ class SignalingController {
       _presenceController.stream;
   SignalingState get state => _state;
 
-
   // Starts the signaling controller by connecting to the signaling server and setting up necessary streams.
   Future<void> start({required String deviceId}) async {
     _deviceId = deviceId;
@@ -93,7 +92,6 @@ class SignalingController {
       },
     );
   }
-
 
   // Stops the signaling controller by disconnecting from the signaling server, stopping all streams, and clearing any pending requests.
   Future<void> stop() async {
@@ -359,13 +357,12 @@ class SignalingController {
     );
   }
 
-
   // Internal method to restore presence watch after reconnection.
   Future<void> _restorePresenceWatch() async {
     if (_watchedPresenceTargets.isEmpty || _manualStop) return;
     await watchPresence(targetUris: _watchedPresenceTargets);
   }
-  
+
   void _handleEnvelope(SignalingEnvelope envelope) {
     if (envelope.connectionResponse != null) {
       final response = envelope.connectionResponse!;
@@ -406,6 +403,10 @@ class SignalingController {
       case SignalingConnectionResponseStatus.blocked:
         throw UnauthorizedException(
           message: reason ?? 'Connection blocked by target device.',
+        );
+      case SignalingConnectionResponseStatus.disconnected:
+        throw ServerException(
+          message: reason ?? 'Remote peer closed the connection.',
         );
       case SignalingConnectionResponseStatus.unspecified:
         throw ServerException(message: reason ?? 'Connection request failed.');

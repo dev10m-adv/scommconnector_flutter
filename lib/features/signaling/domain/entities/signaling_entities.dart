@@ -26,6 +26,9 @@ enum SignalingConnectionResponseStatus {
   rejected,
   busy,
   blocked,
+
+  /// The remote peer intentionally closed the connection.
+  disconnected,
 }
 
 class SignalingDeviceRef {
@@ -136,7 +139,7 @@ class SignalingEnvelope {
   }
 
   Map<String, dynamic> toJson() {
-        return {
+    return {
       'messageId': messageId,
       'sessionId': sessionId,
       'from': from == null ? null : {'uri': from!.uri},
@@ -158,16 +161,10 @@ class SignalingEnvelope {
             },
       'offer': offer == null
           ? null
-          : {
-              'requestId': offer!.requestId,
-              'sdp': offer!.sdp,
-            },
+          : {'requestId': offer!.requestId, 'sdp': offer!.sdp},
       'answer': answer == null
           ? null
-          : {
-              'requestId': answer!.requestId,
-              'sdp': answer!.sdp,
-            },
+          : {'requestId': answer!.requestId, 'sdp': answer!.sdp},
       'iceCandidate': iceCandidate == null
           ? null
           : {
@@ -181,53 +178,87 @@ class SignalingEnvelope {
     };
   }
 
-
   factory SignalingEnvelope.fromJson(Map<String, dynamic> json) {
     return SignalingEnvelope(
       messageId: json['messageId'] as String,
       sessionId: json['sessionId'] as String? ?? '',
       from: json['from'] != null
-          ? SignalingDeviceRef(uri: (json['from'] as Map<String, dynamic>)['uri'] as String)
+          ? SignalingDeviceRef(
+              uri: (json['from'] as Map<String, dynamic>)['uri'] as String,
+            )
           : null,
       to: json['to'] != null
-          ? SignalingDeviceRef(uri: (json['to'] as Map<String, dynamic>)['uri'] as String)
+          ? SignalingDeviceRef(
+              uri: (json['to'] as Map<String, dynamic>)['uri'] as String,
+            )
           : null,
       helloDeviceId: json['helloDeviceId'] as String?,
       connectionRequest: json['connectionRequest'] != null
           ? SignalingConnectionRequest(
-              requestId: (json['connectionRequest'] as Map<String, dynamic>)['requestId'] as String,
-              serviceName: (json['connectionRequest'] as Map<String, dynamic>)['serviceName'] as String,
-              note: (json['connectionRequest'] as Map<String, dynamic>)['note'] as String? ?? '',
+              requestId:
+                  (json['connectionRequest']
+                          as Map<String, dynamic>)['requestId']
+                      as String,
+              serviceName:
+                  (json['connectionRequest']
+                          as Map<String, dynamic>)['serviceName']
+                      as String,
+              note:
+                  (json['connectionRequest'] as Map<String, dynamic>)['note']
+                      as String? ??
+                  '',
             )
           : null,
       connectionResponse: json['connectionResponse'] != null
           ? SignalingConnectionResponse(
-              requestId: (json['connectionResponse'] as Map<String, dynamic>)['requestId'] as String,
+              requestId:
+                  (json['connectionResponse']
+                          as Map<String, dynamic>)['requestId']
+                      as String,
               status: SignalingConnectionResponseStatus.values.firstWhere(
-                (e) => e.name == (json['connectionResponse'] as Map<String, dynamic>)['status'],
+                (e) =>
+                    e.name ==
+                    (json['connectionResponse']
+                        as Map<String, dynamic>)['status'],
                 orElse: () => SignalingConnectionResponseStatus.unspecified,
               ),
-              reason: (json['connectionResponse'] as Map<String, dynamic>)['reason'] as String? ?? '',
+              reason:
+                  (json['connectionResponse'] as Map<String, dynamic>)['reason']
+                      as String? ??
+                  '',
             )
           : null,
       offer: json['offer'] != null
           ? SignalingOffer(
-              requestId: (json['offer'] as Map<String, dynamic>)['requestId'] as String,
+              requestId:
+                  (json['offer'] as Map<String, dynamic>)['requestId']
+                      as String,
               sdp: (json['offer'] as Map<String, dynamic>)['sdp'] as String,
             )
           : null,
       answer: json['answer'] != null
           ? SignalingAnswer(
-              requestId: (json['answer'] as Map<String, dynamic>)['requestId'] as String,
+              requestId:
+                  (json['answer'] as Map<String, dynamic>)['requestId']
+                      as String,
               sdp: (json['answer'] as Map<String, dynamic>)['sdp'] as String,
             )
           : null,
       iceCandidate: json['iceCandidate'] != null
           ? SignalingIceCandidate(
-              requestId: (json['iceCandidate'] as Map<String, dynamic>)['requestId'] as String,
-              candidate: (json['iceCandidate'] as Map<String, dynamic>)['candidate'] as String,
-              sdpMid: (json['iceCandidate'] as Map<String, dynamic>)['sdpMid'] as String,
-              sdpMLineIndex: (json['iceCandidate'] as Map<String, dynamic>)['sdpMLineIndex'] as int,
+              requestId:
+                  (json['iceCandidate'] as Map<String, dynamic>)['requestId']
+                      as String,
+              candidate:
+                  (json['iceCandidate'] as Map<String, dynamic>)['candidate']
+                      as String,
+              sdpMid:
+                  (json['iceCandidate'] as Map<String, dynamic>)['sdpMid']
+                      as String,
+              sdpMLineIndex:
+                  (json['iceCandidate']
+                          as Map<String, dynamic>)['sdpMLineIndex']
+                      as int,
             )
           : null,
       pingTimestampMs: json['pingTimestampMs'] as int?,
