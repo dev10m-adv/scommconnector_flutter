@@ -1,4 +1,4 @@
-import 'package:scommconnector/features/auth/domain/repositories/auth_repository.dart';
+import 'package:scommconnector/features/auth/auth.dart';
 
 class GetLastUsedUserIdUseCase {
   final AuthRepository repository;

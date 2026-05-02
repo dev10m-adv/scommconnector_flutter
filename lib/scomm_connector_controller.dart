@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:scommconnector/core/logging/log.dart';
 import 'package:scommconnector/features/auth/auth.dart';
 import 'package:scommconnector/features/identity/identity.dart';
 import 'package:scommconnector/features/scomm_session_state.dart';
@@ -23,13 +24,9 @@ class ScommConnectorController {
       ScommConnectorController._internal();
   factory ScommConnectorController() => _instance;
 
-  StreamSubscription? _authSub;
-  StreamSubscription? _identitySub;
-  StreamSubscription? _signalingSub;
-  StreamSubscription? _webrtcSub;
-  StreamSubscription<WebRtcIceRoute>? _iceRouteSubscription;
-
+  // Private constructor for singleton pattern
   ScommConnectorController._internal() {
+    // Initialize the data channel controller with transport callbacks
     _datachannelController = ScommDatachannelController(
       transport: ScommDataChannelTransport(
         sendRawMessage: _sendTrackedRawMessage,
@@ -43,6 +40,13 @@ class ScommConnectorController {
     });
     _startTransferSpeedTicker();
   }
+
+  // Stream exposed for consumers to listen
+  StreamSubscription? _authSub;
+  StreamSubscription? _identitySub;
+  StreamSubscription? _signalingSub;
+  StreamSubscription? _webrtcSub;
+  StreamSubscription<WebRtcIceRoute>? _iceRouteSubscription;
 
   final _webrtccontroller = scommDi<WebRtcController>();
   final _connectController = scommDi<ConnectController>();
@@ -172,7 +176,7 @@ class ScommConnectorController {
 
   Future<void> login(ScommLoginConfig config) async {
     if (config is ScommTokenExchangeLoginConfig) {
-      print(
+      infoLog(
         'Starting token exchange authentication for user ${config.email} with provider ${config.provider}',
       );
       await _authController.exchangeProviderToken(
@@ -211,7 +215,7 @@ class ScommConnectorController {
     String deviceType,
     DeviceMode mode,
   ) async {
-    print(
+    infoLog(
       'Registering device with name="$deviceName", type="$deviceType", mode="$mode"',
     );
     await _identityController.registerDevice(
@@ -363,13 +367,13 @@ class ScommConnectorController {
 
     for (final activeSessionId in activeSessionIds) {
       if (_dataMessageSubscriptions.containsKey(activeSessionId)) {
-        print(
+        infoLog(
           '[SCOMM-BIND] Session $activeSessionId already subscribed, skipping',
         );
         continue;
       }
 
-      print(
+      infoLog(
         '[SCOMM-BIND] Subscribing to data messages for session $activeSessionId',
       );
       _dataMessageSubscriptions[activeSessionId] = _webrtccontroller
@@ -588,7 +592,7 @@ class ScommConnectorController {
   //       ? words.skip(words.length - previewCount).join(' ')
   //       : '';
 
-  //   print('Received message preview: $startWords ... $endWords');
+  //   infoLog('Received message preview: $startWords ... $endWords');
   //   return _datachannelController.receiveRawMessage(rawMessage);
   // }
 
@@ -753,11 +757,11 @@ class ScommConnectorController {
   }) async {
     final normalizedRequestId = requestId.trim();
     final mappedSessionId = _requestSessionByRequestId[normalizedRequestId];
-    print(
+    infoLog(
       '[SCOMM-ROUTE] Sending type=${message.type.name} action=${message.action} requestId=$normalizedRequestId → mappedSession=$mappedSessionId | allMappings=${_requestSessionByRequestId.length}',
     );
     if (mappedSessionId != null && mappedSessionId.isNotEmpty) {
-      print('[SCOMM-ROUTE] ✓ Using mapped session $mappedSessionId');
+      infoLog('[SCOMM-ROUTE] ✓ Using mapped session $mappedSessionId');
       _recordSentPayload(message.encode());
       await _webrtccontroller.sendData(
         sessionId: mappedSessionId,
@@ -774,18 +778,18 @@ class ScommConnectorController {
         : null;
     final fallbackSessionId = selectedSessionId ?? singleActiveSessionId;
 
-    print(
+    infoLog(
       '[SCOMM-ROUTE] No mapping found → selectedSession=$selectedSessionId singleActive=$singleActiveSessionId fallback=$fallbackSessionId allSessions=${sessionIds.toList()}',
     );
 
     if (fallbackSessionId == null || fallbackSessionId.isEmpty) {
-      print(
+      infoLog(
         '[SCOMM-ROUTE] ⚠ No session available, falling back to transport.send',
       );
       return _datachannelController.transport.send(message);
     }
 
-    print('[SCOMM-ROUTE] ✓ Using fallback session $fallbackSessionId');
+    infoLog('[SCOMM-ROUTE] ✓ Using fallback session $fallbackSessionId');
     _recordSentPayload(message.encode());
     await _webrtccontroller.sendData(
       sessionId: fallbackSessionId,

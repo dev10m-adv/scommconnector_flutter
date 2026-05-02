@@ -100,7 +100,7 @@ class SignalingServiceGrpcClientImpl implements SignalingServiceGrpcClient {
 
       _incomingSubscription = responseStream.listen(
         (event) {
-          print('Received signaling message: ${event.messageId}');
+          infoLog('Received signaling message: ${event.messageId}');
           if (_isDisposed || _isStopping) return;
 
           if (!_isConnected) {
@@ -117,7 +117,7 @@ class SignalingServiceGrpcClientImpl implements SignalingServiceGrpcClient {
           if (_isDisposed || _isStopping) return;
 
           _isConnected = false;
-          warningLog('Signaling gRPC stream error.', error, stackTrace);
+          errorLog('Signaling gRPC stream error.', error, stackTrace);
 
           if (!_messagesController.isClosed) {
             _messagesController.addError(_toAppError(error), stackTrace);
@@ -168,7 +168,7 @@ class SignalingServiceGrpcClientImpl implements SignalingServiceGrpcClient {
       ];
 
       for (final delay in delays) {
-        print(
+        infoLog(
           'Waiting ${delay.inSeconds} seconds before next signaling reconnect attempt.',
         );
         if (_isDisposed || _isStopping) {
@@ -184,7 +184,7 @@ class SignalingServiceGrpcClientImpl implements SignalingServiceGrpcClient {
         }
 
         try {
-          print('Attempting signaling reconnect...');
+          infoLog('Attempting signaling reconnect...');
           await _openConnection();
 
           if (_isConnected) {

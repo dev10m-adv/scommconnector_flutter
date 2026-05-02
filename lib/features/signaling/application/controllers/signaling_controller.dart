@@ -95,7 +95,7 @@ class SignalingController {
 
   // Stops the signaling controller by disconnecting from the signaling server, stopping all streams, and clearing any pending requests.
   Future<void> stop() async {
-    print('Stopping signaling controller...');
+    infoLog('Stopping signaling controller...');
     _manualStop = true;
     _watchedPresenceTargets = const [];
 
@@ -256,7 +256,7 @@ class SignalingController {
 
     _statusSub ??= watchConnectionStatusUseCase().listen(
       (status) async {
-        print('Connection status changed: $status');
+        infoLog('Connection status changed: $status');
         switch (status) {
           case SignalingConnectionStatus.disconnected:
             await healthMonitor.stopHeartbeat();

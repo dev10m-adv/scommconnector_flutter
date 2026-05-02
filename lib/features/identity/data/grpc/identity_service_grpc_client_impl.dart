@@ -1,4 +1,5 @@
 import 'package:grpc/grpc.dart';
+import 'package:scommconnector/core/logging/log.dart';
 import '../../../../core/errors/errors.dart';
 import '../../domain/entities/device_mode.dart';
 import '../models/device_model.dart';
@@ -154,7 +155,7 @@ class IdentityServiceGrpcClientImpl implements IdentityServiceGrpcClient {
         options: await _authorizedOptions(),
       );
     });
-    print("Package Side: ${response.services.length}");
+    infoLog("Package Side: ${response.services.length}");
 
     return response.services.map(_toDeviceServiceModel).toList(growable: false);
   }
@@ -272,7 +273,6 @@ class IdentityServiceGrpcClientImpl implements IdentityServiceGrpcClient {
   }
 
   AppException _mapGrpcError(GrpcError error) {
-
     switch (error.code) {
       case StatusCode.deadlineExceeded:
         return const RequestTimeoutException();
@@ -293,9 +293,13 @@ class IdentityServiceGrpcClientImpl implements IdentityServiceGrpcClient {
         return const UnknownAppException();
     }
   }
-  
+
   @override
-  Future<DeviceModel> addAllowUserDevice({required String userId, required String deviceId, required String state}) async {
+  Future<DeviceModel> addAllowUserDevice({
+    required String userId,
+    required String deviceId,
+    required String state,
+  }) async {
     final response = await _executeWithNetworkGuard(() async {
       final request = identity_pb.AddAllowUserDeviceRequest(
         userId: userId,
@@ -310,12 +314,16 @@ class IdentityServiceGrpcClientImpl implements IdentityServiceGrpcClient {
     });
     return _toDeviceModel(response.device);
   }
-  
+
   @override
-  Future<List<DeviceModel>> listAllowUserDevices({required String deviceId}) async {
-    print("Listing allow user devices for deviceId: $deviceId");
+  Future<List<DeviceModel>> listAllowUserDevices({
+    required String deviceId,
+  }) async {
+    infoLog("Listing allow user devices for deviceId: $deviceId");
     final response = await _executeWithNetworkGuard(() async {
-      final request = identity_pb.ListAllowUserDevicesRequest(deviceId: deviceId);
+      final request = identity_pb.ListAllowUserDevicesRequest(
+        deviceId: deviceId,
+      );
       return _client.listAllowUserDevices(
         request,
         options: await _authorizedOptions(),
@@ -324,9 +332,12 @@ class IdentityServiceGrpcClientImpl implements IdentityServiceGrpcClient {
 
     return response.devices.map(_toDeviceModel).toList(growable: false);
   }
-  
+
   @override
-  Future<String> removeAllowUserDevice({required String userId, required String deviceId}) async {
+  Future<String> removeAllowUserDevice({
+    required String userId,
+    required String deviceId,
+  }) async {
     final response = await _executeWithNetworkGuard(() async {
       final request = identity_pb.RemoveAllowUserDeviceRequest(
         userId: userId,
@@ -342,9 +353,13 @@ class IdentityServiceGrpcClientImpl implements IdentityServiceGrpcClient {
         ? response.message
         : 'Allowed user device removed successfully';
   }
-  
+
   @override
-  Future<DeviceModel> updateAllowUserDevice({required String userId, required String deviceId, required String state}) async {
+  Future<DeviceModel> updateAllowUserDevice({
+    required String userId,
+    required String deviceId,
+    required String state,
+  }) async {
     final response = await _executeWithNetworkGuard(() async {
       final request = identity_pb.UpdateAllowUserDeviceRequest(
         userId: userId,

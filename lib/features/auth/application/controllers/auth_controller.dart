@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:scommconnector/core/di/service_locator.dart';
+import 'package:scommconnector/core/logging/log.dart';
 import 'package:scommconnector/features/auth/domain/usecases/remove_last_user_usecase.dart';
 
 import '../../../../core/errors/errors.dart';
@@ -57,7 +58,6 @@ class ScommAuthController {
     _setLoading();
 
     try {
-
       final tokens = await _exchangeExternalTokenUseCase(
         ExchangeExternalTokenParams(
           provider: provider,
@@ -80,76 +80,90 @@ class ScommAuthController {
   }
 
   Future<void> init() async {
-    print('Initializing authentication state...');
+    infoLog('Initializing authentication state...');
     // await _removeLastUserUsecase.call();
     final userId = await _getLastUsedUserIdUseCase.call();
-    print('Last used userId: $userId');
+    infoLog('Last used userId: $userId');
     if (userId == null) {
-      _notify(_state.copyWith(
-        isLoading: false,
-        isLoggedIn: false,
-        error: null,
-        clearError: true
-      ));
+      _notify(
+        _state.copyWith(
+          isLoading: false,
+          isLoggedIn: false,
+          error: null,
+          clearError: true,
+        ),
+      );
       return;
     }
     final token = await _getAccessToken(email: userId);
-    print('Retrieved stored access token: $token');
+    infoLog('Retrieved stored access token: $token');
     if (token == null || token.isEmpty) {
-      _notify(_state.copyWith(
-        isLoading: false,
-        isLoggedIn: false,
-        error: 'No stored access token found. Please log in.',
-      ));
+      _notify(
+        _state.copyWith(
+          isLoading: false,
+          isLoggedIn: false,
+          error: 'No stored access token found. Please log in.',
+        ),
+      );
       return;
     }
-    _notify(_state.copyWith(
-      isLoading: false,
-      isLoggedIn: true,
-      error: null,
-      email: userId
-    ));
+    _notify(
+      _state.copyWith(
+        isLoading: false,
+        isLoggedIn: true,
+        error: null,
+        email: userId,
+      ),
+    );
     scommDi<AuthSessionState>().setAccessToken(token);
   }
 
   Future<void> initialize(String email) async {
     try {
       final token = await _getAccessToken(email: email);
-      print('Retrieved stored access token for $email: $token');
+      infoLog('Retrieved stored access token for $email: $token');
       if (token == null || token.isEmpty) {
-        _notify(_state.copyWith(
-          isLoading: false,
-          isLoggedIn: false,
-          error: 'No stored access token found. Please log in.',
-        ));
+        _notify(
+          _state.copyWith(
+            isLoading: false,
+            isLoggedIn: false,
+            error: 'No stored access token found. Please log in.',
+          ),
+        );
         return;
       }
-      _notify(_state.copyWith(
-        isLoading: false,
-        isLoggedIn: true,
-        error: null,
-        email: _state.email,
-      ));
+      _notify(
+        _state.copyWith(
+          isLoading: false,
+          isLoggedIn: true,
+          error: null,
+          email: _state.email,
+        ),
+      );
       scommDi<AuthSessionState>().setAccessToken(token);
     } on UnauthorizedException {
-      _notify(_state.copyWith(
-        isLoading: false,
-        isLoggedIn: false,
-        error: 'Stored token expired. Re-authentication required.',
-      ));
+      _notify(
+        _state.copyWith(
+          isLoading: false,
+          isLoggedIn: false,
+          error: 'Stored token expired. Re-authentication required.',
+        ),
+      );
     } catch (error) {
-      _notify(_state.copyWith(
-        isLoading: false,
-        isLoggedIn: false,
-        error: 'Failed to initialize authentication: ${error.toString()}',
-      ));
+      _notify(
+        _state.copyWith(
+          isLoading: false,
+          isLoggedIn: false,
+          error: 'Failed to initialize authentication: ${error.toString()}',
+        ),
+      );
     }
   }
 
   Future<void> exchangeImapLogin({required ImapCredentials credentials}) async {
     _setLoading();
     try {
-      print('Exchanging IMAP credentials for tokens...');
+      infoLog('Exchanging IMAP credentials for tokens...');
       final tokens = await _exchangeImapCredentialsUseCase(
         ExchangeImapCredentialsParams(
           provider: 'imap',
@@ -192,11 +206,26 @@ class ScommAuthController {
   }
 
   void _setAuthenticated(AuthTokens tokens, String? email) {
-    _notify(_state.copyWith(clearError: true, isLoading: false, isLoggedIn: true, error: null, email: email));
+    _notify(
+      _state.copyWith(
+        clearError: true,
+        isLoading: false,
+        isLoggedIn: true,
+        error: null,
+        email: email,
+      ),
+    );
   }
 
   void _setFailure(Object error) {
-    _notify(_state.copyWith(clearError: false, isLoading: false, isLoggedIn: false, error: _toUserMessage(error)));
+    _notify(
+      _state.copyWith(
+        clearError: false,
+        isLoading: false,
+        isLoggedIn: false,
+        error: _toUserMessage(error),
+      ),
+    );
   }
 
   String _toUserMessage(Object error) {

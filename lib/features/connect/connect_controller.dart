@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:scommconnector/core/logging/log.dart';
 import 'package:scommconnector/features/connect/connect_session.dart';
 import 'package:scommconnector/features/connect/connect_session_store.dart';
 import 'package:scommconnector/features/webrtc/domain/entities/webrtc_ice_server_config.dart';
@@ -64,7 +65,7 @@ class ConnectController {
     _configuredIceServers = List<WebRtcIceServerConfig>.from(iceServers);
 
     if (_isSignalingStart) {
-      print('Signaling stack is already started.');
+      infoLog('Signaling stack is already started.');
       return;
     }
 
@@ -76,7 +77,7 @@ class ConnectController {
       _signalingSubscription = signalingController.incomingMessages.listen(
         _handleSignalingEnvelope,
         onError: (error, stackTrace) {
-          print('Error handling signaling envelope: $error');
+          infoLog('Error handling signaling envelope: $error');
         },
       );
 
@@ -87,7 +88,7 @@ class ConnectController {
       _recoveryOfferSubscription = webRtcController.recoveryOfferStream.listen(
         (entry) => _sendRecoveryOffer(sessionId: entry.key, offer: entry.value),
         onError: (error) {
-          print('Error handling recovery offer: $error');
+          infoLog('Error handling recovery offer: $error');
         },
       );
     } catch (error) {
@@ -131,7 +132,7 @@ class ConnectController {
     Duration timeout = const Duration(seconds: 12),
   }) async {
     if (_shouldDropOutgoingRequest(toUri: toUri)) {
-      print('Dropping outgoing connection request to $toUri.');
+      infoLog('Dropping outgoing connection request to $toUri.');
       return;
     }
 
@@ -236,7 +237,7 @@ class ConnectController {
                 remoteUri: remoteUri,
                 requestId: request.requestId,
               )) {
-            print(
+            infoLog(
               'Dropping incoming connection request from $remoteUri requestId=${request.requestId}.',
             );
             break;
@@ -258,7 +259,7 @@ class ConnectController {
             remoteUri: remoteUri,
             requestId: requestId,
           )) {
-            print(
+            infoLog(
               'Dropping incoming offer from $remoteUri requestId=$requestId.',
             );
             break;
@@ -268,7 +269,7 @@ class ConnectController {
           // A duplicate offer that races the ongoing initialize → answer flow
           // would hit "PeerConnection is not initialized" and must be dropped.
           if (_processingOfferSessions.contains(sessionId)) {
-            print(
+            infoLog(
               'Dropping duplicate offer: offer already in progress. sessionId=$sessionId',
             );
             break;
@@ -361,11 +362,11 @@ class ConnectController {
           break;
 
         default:
-          print('Received unsupported signaling envelope: $envelope');
+          infoLog('Received unsupported signaling envelope: $envelope');
           break;
       }
     } catch (e) {
-      print('Error handling signaling envelope: $e');
+      infoLog('Error handling signaling envelope: $e');
     }
   }
 
@@ -382,7 +383,7 @@ class ConnectController {
             candidate: candidate,
           ),
           onError: (error, stackTrace) {
-            print('Error forwarding ICE candidate: $error');
+            infoLog('Error forwarding ICE candidate: $error');
           },
         );
   }
@@ -430,7 +431,7 @@ class ConnectController {
     final localUri = _localUri;
     if (session == null || localUri == null) return;
 
-    print(
+    infoLog(
       'Forwarding recovery offer via signaling. sessionId=$sessionId requestId=${session.requestId}',
     );
 
@@ -444,7 +445,7 @@ class ConnectController {
         ),
       );
     } catch (e) {
-      print('Failed to forward recovery offer: $e');
+      infoLog('Failed to forward recovery offer: $e');
     }
   }
 
@@ -477,7 +478,7 @@ class ConnectController {
       );
     } catch (e) {
       // Best-effort: if signaling is already down the remote will time out.
-      print('Failed to send disconnect notice: $e');
+      infoLog('Failed to send disconnect notice: $e');
     }
   }
 
@@ -531,12 +532,12 @@ class ConnectController {
   //       _activeRequestId != null &&
   //       (_activeRequestId != requestId || _remoteUri != remoteUri);
 
-  //   print(
+  //   infoLog(
   //     'Preparing incoming offer: activeRequestId=$_activeRequestId activeRemoteUri=$_remoteUri incomingRequestId=$requestId incomingRemoteUri=$remoteUri isFreshRemoteSession=$isFreshRemoteSession webrtcSessionGeneration=$_webrtcSessionGeneration',
   //   );
 
   //   if (isFreshRemoteSession) {
-  //     print(
+  //     infoLog(
   //       'Resetting WebRTC session for fresh incoming offer requestId $requestId.',
   //     );
   //     await _resetWebRtcSession();
@@ -577,19 +578,19 @@ class ConnectController {
 
   // Future<void> _resetWebRtcSession() async {
   //   final nextGeneration = _webrtcSessionGeneration + 1;
-  //   print(
+  //   infoLog(
   //     'Resetting WebRTC session: previousGeneration=$_webrtcSessionGeneration nextGeneration=$nextGeneration activeRequestId=$_activeRequestId remoteUri=$_remoteUri dataChannels=${_configuredDataChannels.length} iceServers=${_configuredIceServers.length}',
   //   );
   //   await webRtcController.close(_activeRequestId!);
   //   await _initializeWebRtcSession(reason: 'reset');
-  //   print(
+  //   infoLog(
   //     'WebRTC session reset complete: currentGeneration=$_webrtcSessionGeneration activeRequestId=$_activeRequestId remoteUri=$_remoteUri',
   //   );
   // }
 
   // Future<void> _initializeWebRtcSession({required String reason}) async {
   //   final nextGeneration = _webrtcSessionGeneration + 1;
-  //   print(
+  //   infoLog(
   //     'Initializing WebRTC session generation=$nextGeneration reason=$reason dataChannels=${_configuredDataChannels.length} iceServers=${_configuredIceServers.length}',
   //   );
   //   await webRtcController.initialize(
@@ -598,7 +599,7 @@ class ConnectController {
   //     iceServers: _configuredIceServers,
   //   );
   //   _webrtcSessionGeneration = nextGeneration;
-  //   print(
+  //   infoLog(
   //     'Initialized WebRTC session generation=$_webrtcSessionGeneration reason=$reason',
   //   );
   // }

@@ -5,6 +5,7 @@ import 'package:scommconnector/core/di/feature/connect_di.dart';
 import 'package:scommconnector/core/di/feature/identity_id.dart';
 import 'package:scommconnector/core/di/feature/signaling_di.dart';
 import 'package:scommconnector/core/di/feature/webrtc_di.dart';
+import 'package:scommconnector/core/logging/log.dart';
 import 'package:scommconnector/features/auth/auth.dart';
 import 'package:scommconnector/features/connect/connect_controller.dart';
 import 'package:scommconnector/features/identity/identity.dart';
@@ -19,7 +20,6 @@ Future<void> setupDependencies({
   required int port,
   bool useTls = false,
 }) async {
-
   if (!scommDi.isRegistered<SharedPreferences>()) {
     final prefs = await SharedPreferences.getInstance();
     scommDi.registerLazySingleton<SharedPreferences>(() => prefs);
@@ -33,39 +33,38 @@ Future<void> setupDependencies({
   // leave missing registrations (for example, auth chain absent while
   // AuthSessionState is already registered).
 
-  print('Setting up Scomm Connector dependencies...');
+  infoLog('Setting up Scomm Connector dependencies...');
   if (!scommDi.isRegistered<AuthServiceGrpcClientImpl>() ||
       !scommDi.isRegistered<AuthServiceGrpcClient>()) {
     await authDI(scommDi, host, port, useTls);
   }
 
-  print('Auth DI setup complete');
+  infoLog('Auth DI setup complete');
 
   if (!scommDi.isRegistered<AuthSessionState>() ||
       !scommDi.isRegistered<IdentityController>()) {
     await identityDI(scommDi, host, port, useTls);
   }
 
-  print('Identity DI setup complete');
+  infoLog('Identity DI setup complete');
 
   if (!scommDi.isRegistered<SignalingController>()) {
     await signalingDI(scommDi, host, port, useTls);
   }
 
-  print('Signaling DI setup complete');
+  infoLog('Signaling DI setup complete');
 
   if (!scommDi.isRegistered<WebRtcController>()) {
     await webrtcDI(scommDi);
   }
 
-  print('WebRTC DI setup complete');
+  infoLog('WebRTC DI setup complete');
 
   if (!scommDi.isRegistered<ConnectController>()) {
     await connectDI(scommDi);
   }
 
-
-  print('Connect DI setup complete');
+  infoLog('Connect DI setup complete');
 }
 
 class AuthSessionState {

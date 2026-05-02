@@ -1,5 +1,6 @@
 import 'package:fixnum/fixnum.dart' as fixnum;
 import 'package:grpc/grpc.dart';
+import 'package:scommconnector/core/logging/log.dart';
 import '../../../../core/errors/errors.dart';
 import '../../domain/entities/imap_credentials.dart';
 import 'generated/auth/auth.pb.dart' as auth_pb;
@@ -64,7 +65,9 @@ class AuthServiceGrpcClientImpl implements AuthServiceGrpcClient {
   }
 
   @override
-  Future<AuthTokensModel> refreshTokens(RefreshAccessTokenRequestModel request) async {
+  Future<AuthTokensModel> refreshTokens(
+    RefreshAccessTokenRequestModel request,
+  ) async {
     final response = await _executeWithNetworkGuard(() {
       final grpcRequest = auth_pb.RefreshTokensRequest(
         refreshToken: request.refreshToken,
@@ -87,7 +90,10 @@ class AuthServiceGrpcClientImpl implements AuthServiceGrpcClient {
     );
   }
 
-  void _ensureSuccess(auth_pb.AuthTokensResponse response, {required String fallback}) {
+  void _ensureSuccess(
+    auth_pb.AuthTokensResponse response, {
+    required String fallback,
+  }) {
     if (response.success) {
       return;
     }
@@ -118,7 +124,7 @@ class AuthServiceGrpcClientImpl implements AuthServiceGrpcClient {
 
   Future<T> _executeWithNetworkGuard<T>(Future<T> Function() action) async {
     try {
-      print('Executing gRPC action with network guard...');
+      infoLog('Executing gRPC action with network guard...');
       return await action();
     } on GrpcError catch (error) {
       throw _mapGrpcError(error);
