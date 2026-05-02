@@ -1,10 +1,11 @@
 name: scommconnector
-description: A sample command-line application.
+description: SComm Connector Flutter package
 version: 1.0.0
-# repository: https://github.com/my_org/my_repo
+publish_to: none
+repository: git@github.com:dev10m-adv/scommconnector_flutter.git
 
 environment:
-  sdk: ^3.11.1
+  sdk: ">=3.3.0 <4.0.0"
 
 # Add regular dependencies here.
 dependencies:
@@ -17,9 +18,13 @@ dependencies:
   fixnum: ^1.1.1
   get_it: ^9.2.0
   grpc: ^5.1.0
-  flutter_webrtc: ^1.4.1
   signals: ^6.3.0
   equatable: ^2.0.8
+  # flutter_webrtc: ^1.4.1
+  flutter_webrtc:
+    git:
+      url: https://github.com/dev10m-adv/flutter-webrtc
+      ref: main
 
 dev_dependencies:
   lints: ^6.0.0
