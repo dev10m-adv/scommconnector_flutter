@@ -73,27 +73,45 @@ class ScommConnectorController {
   final _sessionStateController =
       StreamController<ScommSessionState>.broadcast();
 
+  /// Returns the latest combined auth, identity, signaling, and WebRTC state.
   ScommSessionState get sessionState => _sessionState;
+
+  /// Emits a new session snapshot whenever any core connector state changes.
   Stream<ScommSessionState> get stream => _sessionStateController.stream;
+
+  /// Returns the latest measured data channel upload and download speed.
   ScommTransferSpeed get transferSpeed => _transferSpeed;
+
+  /// Emits transfer speed updates once per second.
   Stream<ScommTransferSpeed> get transferSpeeds =>
       _transferSpeedController.stream;
+
+  /// Returns the latest ICE route selected for the active WebRTC session.
   WebRtcIceRoute get iceRoute => _iceRoute;
+
+  /// Emits ICE route changes for the active WebRTC session.
   Stream<WebRtcIceRoute> get iceRoutes => _iceRouteController.stream;
 
   // Snapshot states for consumers that need synchronous reads.
 
+  /// Returns the current identity snapshot for the authenticated user/device.
   IdentityState get identityState => _identityController.state;
+
+  /// Returns the WebRTC state for the selected session, or an empty state.
   WebRtcState get webrtcState {
     final sessionId = _connectController.selectedSessionId;
     if (sessionId == null) return const WebRtcState();
     return _webrtccontroller.stateOf(sessionId);
   }
 
+  /// Returns the current signaling connection state.
   SignalingState get signalingState =>
       _connectController.signalingController.state;
+
+  /// Emits a simple notification when any exposed state snapshot may be stale.
   Stream<void> get stateChanges => _stateChangesController.stream;
 
+  /// Returns whether the selected WebRTC session can currently send data.
   bool _canSendDataChannel() {
     final status = webrtcState.status;
     return status == WebRtcStatus.connected ||
@@ -101,12 +119,14 @@ class ScommConnectorController {
         status == WebRtcStatus.retrying;
   }
 
+  /// Emits a session state only when it differs from the current snapshot.
   void _emitSession(ScommSessionState next) {
     if (_sessionState == next) return;
     _sessionState = next;
     _sessionStateController.add(next);
   }
 
+  /// Rebuilds the public session state from auth, identity, signaling, and WebRTC.
   void _syncSessionState() {
     final auth = _authController.state;
     final identity = _identityController.state;
@@ -152,6 +172,7 @@ class ScommConnectorController {
 
   ///////// Authentication methods ///////////
 
+  /// Initializes cached auth state and subscribes to internal state streams.
   Future<void> initialize() async {
     await _authController.init();
 
@@ -174,6 +195,7 @@ class ScommConnectorController {
     _syncSessionState();
   }
 
+  /// Authenticates the user with either IMAP credentials or an external token.
   Future<void> login(ScommLoginConfig config) async {
     if (config is ScommTokenExchangeLoginConfig) {
       infoLog(
@@ -197,8 +219,10 @@ class ScommConnectorController {
     }
   }
 
+  /// Logs out the current user and clears the active auth session.
   Future<void> logout() => _authController.logout();
 
+  /// Refreshes the backend access token using a refresh token and email.
   Future<void> refreshAccessToken({
     required String refreshToken,
     required String email,
@@ -210,6 +234,7 @@ class ScommConnectorController {
   }
 
   ////////// Identity methods //////////
+  /// Registers the current machine as an SComm device for the logged-in user.
   Future<void> registerDevice(
     String deviceName,
     String deviceType,
@@ -225,6 +250,7 @@ class ScommConnectorController {
     );
   }
 
+  /// Registers a service name under an existing SComm device.
   Future<void> registerService(String deviceId, String serviceName) async {
     await _identityController.registerService(
       deviceId: deviceId,
@@ -232,24 +258,31 @@ class ScommConnectorController {
     );
   }
 
+  /// Lists devices allowlisted for the given local device id.
   Future<List<IdentityDevice>> listAllowlistedDevices(String myDeviceId) =>
       _identityController.listAllowUserDevices(deviceId: myDeviceId);
 
+  /// Loads the locally saved device identity for the given user id or email.
   Future<SavedDeviceIdentity?> loadMyCurrentDeviceIdentity(String userId) =>
       _identityController.loadSavedDeviceIdentity(userId);
 
+  /// Lists all devices registered for the current user.
   Future<List<IdentityDevice>> listMyDevices() =>
       _identityController.listMyDevices();
 
+  /// Deletes a registered device by id.
   Future<void> deleteDevice(String deviceId) =>
       _identityController.deleteDevice(deviceId: deviceId);
 
+  /// Deletes a registered service by id.
   Future<void> deleteService(String serviceId) =>
       _identityController.deleteService(serviceId: serviceId);
 
+  /// Lists all services registered for a device.
   Future<List<DeviceService>> listDeviceServices(String deviceId) =>
       _identityController.listDeviceServices(deviceId: deviceId);
 
+  /// Updates the display name of a registered service.
   Future<void> updateService({
     required String serviceId,
     required String serviceName,
@@ -260,6 +293,7 @@ class ScommConnectorController {
     );
   }
 
+  /// Adds a user/device pair to the allowlist with the provided state.
   Future<void> addAllowUserDevice({
     required String userId,
     required String deviceId,
@@ -272,6 +306,7 @@ class ScommConnectorController {
     );
   }
 
+  /// Removes a user/device pair from the allowlist.
   Future<void> removeAllowUserDevice({
     required String userId,
     required String deviceId,
@@ -282,6 +317,7 @@ class ScommConnectorController {
     );
   }
 
+  /// Updates the allowlist state for a user/device pair.
   Future<void> updateAllowUserDevice({
     required String userId,
     required String deviceId,
@@ -294,6 +330,7 @@ class ScommConnectorController {
     );
   }
 
+  /// Updates the name, type, and mode for a registered device.
   Future<void> updateDevice({
     required String deviceId,
     required String deviceName,
@@ -307,16 +344,19 @@ class ScommConnectorController {
   );
 
   // Backward-compatible aliases used by runner code.
+  /// Backward-compatible alias for registering the current device.
   Future<void> registerDevices(
     String deviceName,
     String deviceType,
     DeviceMode mode,
   ) => registerDevice(deviceName, deviceType, mode);
 
+  /// Backward-compatible alias for loading the saved current device identity.
   Future<SavedDeviceIdentity?> loadMyDevices(String userId) =>
       loadMyCurrentDeviceIdentity(userId);
 
   ///// Connection and DataChannel methods //////////
+  /// Starts signaling/WebRTC for the registered device using the given config.
   Future<void> start(ScommStartConfig config) async {
     final localUri = 'scomm:${config.email}/${config.deviceId}';
 
@@ -334,6 +374,7 @@ class ScommConnectorController {
     _requestSessionByRequestId.clear();
   }
 
+  /// Binds data message and ICE route listeners for all active sessions.
   Future<void> bindSelectedSessionStreams() async {
     final sessionId = _connectController.selectedSessionId;
     if (sessionId == null) {
@@ -411,16 +452,19 @@ class ScommConnectorController {
         .listen(_setIceRoute);
   }
 
+  /// Stops the active WebRTC session and disconnects signaling.
   Future<void> stop() async {
     await stopWebRtc();
     await stopSignaling();
   }
 
+  /// Disconnects signaling and clears cached incoming connection requests.
   Future<void> stopSignaling() async {
     _incomingRequestCache.clear();
     await _connectController.stopSignaling();
   }
 
+  /// Stops the currently selected WebRTC session if one exists.
   Future<void> stopWebRtc() async {
     final sessionId = _connectController.selectedSession?.sessionId;
     if (sessionId != null) {
@@ -428,6 +472,7 @@ class ScommConnectorController {
     }
   }
 
+  /// Stops the WebRTC session associated with the given remote URI.
   Future<void> stopWebRtcForUri(String remoteUri) async {
     final session = _connectController.sessionStore.getByRemoteUri(remoteUri);
     if (session != null) {
@@ -435,6 +480,7 @@ class ScommConnectorController {
     }
   }
 
+  /// Stops one WebRTC session and removes all routing state attached to it.
   Future<void> _stopWebRtcSession(String sessionId) async {
     await _connectController.stopWebRtcSession(sessionId);
     await _dataMessageSubscriptions.remove(sessionId)?.cancel();
@@ -447,6 +493,7 @@ class ScommConnectorController {
     }
   }
 
+  /// Cancels subscriptions, closes streams, stops sessions, and releases resources.
   Future<void> dispose() async {
     await _authSub?.cancel();
     await _identitySub?.cancel();
@@ -468,11 +515,13 @@ class ScommConnectorController {
     await stop();
   }
 
+  /// Restarts signaling/WebRTC by stopping current sessions and starting again.
   Future<void> restart(ScommStartConfig config) async {
     await stop();
     await start(config);
   }
 
+  /// Emits WebRTC connection state changes for the selected session.
   Stream<WebRtcConnectionState> get scommConnectionState {
     final sessionId = _connectController.selectedSessionId;
     if (sessionId == null) {
@@ -481,6 +530,7 @@ class ScommConnectorController {
     return _webrtccontroller.connectionStates(sessionId);
   }
 
+  /// Emits raw WebRTC data messages for the selected session.
   Stream<WebRtcDataMessage> get webrtcDataMessages {
     final sessionId = _connectController.selectedSessionId;
     if (sessionId == null) {
@@ -489,6 +539,7 @@ class ScommConnectorController {
     return _webrtccontroller.receivedDataMessages(sessionId);
   }
 
+  /// Refreshes and returns the current ICE route for the selected session.
   Future<WebRtcIceRoute> refreshIceRoute() {
     final sessionId = _connectController.selectedSessionId;
     if (sessionId == null) {
@@ -497,6 +548,7 @@ class ScommConnectorController {
     return _webrtccontroller.refreshIceRoute(sessionId);
   }
 
+  /// Emits incoming connection requests and caches them for accept/reject calls.
   Stream<SignalEnvelope> get scommConnectionIncomingRequests =>
       _connectController.incomingConnectionRequests.map((request) {
         final requestId = request.connectionRequest?.requestId;
@@ -506,13 +558,15 @@ class ScommConnectorController {
         return request;
       });
 
+  /// Emits all incoming signaling envelopes from the signaling controller.
   Stream<SignalEnvelope> get incomingSignalingMessages =>
       _connectController.signalingController.incomingMessages;
 
-  //// Stream reciving from DataChannel
+  /// Emits parsed SComm data channel messages from active sessions.
   Stream<ScommRemoteMessage> get scommDataChannelMessages =>
       _datachannelController.messages;
 
+  /// Sends a raw string payload over the main data channel.
   Future<void> sendMessageOverDataChannel(String message) async {
     await _sendTrackedRawMessage(
       channelLabel: ScommDataChannelTransport.mainChannel,
@@ -520,6 +574,7 @@ class ScommConnectorController {
     );
   }
 
+  /// Sends a structured request message and returns the request id used.
   Future<String> sendDatachannelRequest({
     required String service,
     required String action,
@@ -534,6 +589,7 @@ class ScommConnectorController {
     );
   }
 
+  /// Sends a structured response routed to the session that sent the request.
   Future<void> sendDatachannelResponse({
     required String requestId,
     required String service,
@@ -552,6 +608,7 @@ class ScommConnectorController {
     );
   }
 
+  /// Sends a structured stream chunk routed by request id.
   Future<void> sendDatachannelStream({
     required String requestId,
     required String service,
@@ -570,6 +627,7 @@ class ScommConnectorController {
     );
   }
 
+  /// Sends a structured event message over the main data channel.
   Future<void> sendDatachannelEvent({
     required String service,
     required String action,
@@ -596,7 +654,7 @@ class ScommConnectorController {
   //   return _datachannelController.receiveRawMessage(rawMessage);
   // }
 
-  ///// Is DataChannel open
+  /// Emits true when the selected session data channel is connected.
   Stream<bool> get isDataChannelOpen {
     final sessionId = _connectController.selectedSessionId;
     if (sessionId == null) {
@@ -609,6 +667,7 @@ class ScommConnectorController {
         .distinct();
   }
 
+  /// Accepts a cached incoming connection request and binds its session streams.
   Future<void> acceptConnectionRequest(String requestId) async {
     final request = _incomingRequestCache.remove(requestId);
     if (request == null) {
@@ -623,6 +682,7 @@ class ScommConnectorController {
     await bindSelectedSessionStreams();
   }
 
+  /// Rejects a cached incoming connection request with an optional reason.
   Future<void> rejectConnectionRequest(
     String requestId, {
     String reason = '',
@@ -639,17 +699,21 @@ class ScommConnectorController {
     );
   }
 
+  /// Backward-compatible presence stream getter with the original misspelled name.
   Stream<SignalingPresenceEvent> get presebceEvents =>
       _connectController.signalingController.presenceEvents;
 
+  /// Emits presence updates for watched device URIs.
   Stream<SignalingPresenceEvent> get presenceEvents => presebceEvents;
 
+  /// Requests presence updates for the given target device URIs.
   Future<void> watchPresence(List<String> targetUris) {
     return _connectController.signalingController.watchPresence(
       targetUris: targetUris,
     );
   }
 
+  /// Emits the list of watched device URIs currently reported as online.
   Stream<List<String>> get onlineDevicesStream async* {
     final statusByUri = <String, String>{};
     await for (final event in presenceEvents) {
@@ -661,6 +725,7 @@ class ScommConnectorController {
     }
   }
 
+  /// Sends a connection request to a remote SComm URI using the main channel.
   Future<void> sendConnectionRequest(String deviceId) async {
     await _connectController.initiateConnection(
       toUri: deviceId,
@@ -670,6 +735,7 @@ class ScommConnectorController {
     await bindSelectedSessionStreams();
   }
 
+  /// Sends a connection request with a custom service name, note, and timeout.
   Future<void> sendConnectionRequestDetailed({
     required String toUri,
     required String serviceName,
@@ -686,6 +752,7 @@ class ScommConnectorController {
     await bindSelectedSessionStreams();
   }
 
+  /// Applies a remote WebRTC answer to the selected session.
   Future<void> setRemoteAnswer(WebRtcSessionDescription answer) {
     final sessionId = _connectController.selectedSessionId;
     if (sessionId == null) {
@@ -697,6 +764,7 @@ class ScommConnectorController {
     );
   }
 
+  /// Adds a remote ICE candidate to the selected WebRTC session.
   Future<void> addRemoteIceCandidate(WebRtcIceCandidate candidate) {
     final sessionId = _connectController.selectedSessionId;
     if (sessionId == null) {
@@ -708,6 +776,7 @@ class ScommConnectorController {
     );
   }
 
+  /// Adds a data channel with the given label to the selected session.
   Future<void> addDataChannel(String label) {
     final sessionId = _connectController.selectedSessionId;
     if (sessionId == null) {
@@ -716,6 +785,7 @@ class ScommConnectorController {
     return _webrtccontroller.addDataChannel(sessionId: sessionId, label: label);
   }
 
+  /// Removes a data channel with the given label from the selected session.
   Future<void> removeDataChannel(String label) {
     final sessionId = _connectController.selectedSessionId;
     if (sessionId == null) {
@@ -727,11 +797,13 @@ class ScommConnectorController {
     );
   }
 
+  /// Normalizes presence status text and checks whether it means online.
   bool _isOnlineStatus(String status) {
     final normalized = status.trim().toUpperCase();
     return normalized == 'ONLINE' || normalized == 'AVAILABLE';
   }
 
+  /// Sends raw data through WebRTC while updating transfer speed counters.
   Future<void> _sendTrackedRawMessage({
     required String channelLabel,
     required String message,
@@ -751,6 +823,7 @@ class ScommConnectorController {
     );
   }
 
+  /// Routes response and stream messages back to the session that made the request.
   Future<void> _sendRoutedDataChannelMessage({
     required String requestId,
     required ScommRemoteMessage message,
@@ -798,14 +871,17 @@ class ScommConnectorController {
     );
   }
 
+  /// Adds a sent payload byte count to the current one-second speed window.
   void _recordSentPayload(String message) {
     _sentBytesSinceLastTick += utf8.encode(message).length;
   }
 
+  /// Adds a received payload byte count to the current one-second speed window.
   void _recordReceivedPayload(String message) {
     _receivedBytesSinceLastTick += utf8.encode(message).length;
   }
 
+  /// Starts the timer that publishes per-second transfer speed snapshots.
   void _startTransferSpeedTicker() {
     _transferSpeedTimer?.cancel();
     _transferSpeedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -822,6 +898,7 @@ class ScommConnectorController {
     });
   }
 
+  /// Clears transfer speed counters and emits a zero-speed snapshot.
   void _resetTransferSpeed() {
     _sentBytesSinceLastTick = 0;
     _receivedBytesSinceLastTick = 0;
@@ -831,6 +908,7 @@ class ScommConnectorController {
     }
   }
 
+  /// Stores and broadcasts a changed ICE route for the active session.
   void _setIceRoute(WebRtcIceRoute next) {
     if (_iceRoute == next) {
       return;
