@@ -200,8 +200,8 @@ packages:
     description:
       path: "."
       ref: main
-      resolved-ref: "1f31167e2e83b2d511fd63ef83f7c8f5e49ece96"
-      url: "https://github.com/dev10m-adv/flutter-webrtc"
+      resolved-ref: "7515fc146d3e960de952d407f597a30a739047ff"
+      url: "https://github.com/advforks/flutter-webrtc.git"
     source: git
     version: "1.4.1"
   frontend_server_client:

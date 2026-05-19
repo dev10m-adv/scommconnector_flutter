@@ -23,7 +23,7 @@ dependencies:
   # flutter_webrtc: ^1.4.1
   flutter_webrtc:
     git:
-      url: https://github.com/dev10m-adv/flutter-webrtc
+      url: https://github.com/advforks/flutter-webrtc.git
       ref: main
 
 dev_dependencies:
